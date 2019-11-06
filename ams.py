@@ -26,6 +26,10 @@ class AMS(BaseAgent):
         "Suspends an agent"
         pass
 
+    def resume_agent(self, aid):
+        "Resumes the execution of an agent"
+        pass
+
     def end_agent(self, aid):
         "Finishes the execution of an agent"
         pass

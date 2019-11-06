@@ -1,6 +1,3 @@
-
-# TODO: definir los estados de los agentes
-
 class AMSAgentDescription:
     def __init__(self, aid, state):
         self.aid = aid
@@ -23,4 +20,6 @@ class ServiceDescription:
     # que se deben conocer para explotar el servicio
     # Una colección de propiedades de servicios especificadas en 
     # forma de pares clave-valor
-    pass
+    def __init__(self, name, type_):
+        self.name = name
+        self.type = type_

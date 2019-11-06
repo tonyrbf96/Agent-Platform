@@ -1,3 +1,5 @@
+import json
+
 class AID:
     def __init__(self, name:str, addresses:list=None, resolvers:list=None):
         """
@@ -16,10 +18,19 @@ class AID:
 
         self.resolvers = resolvers if resolvers else list()
 
-    @staticmethod
-    def create_aid(message)
-        "Creats an aid from an ACL message"
-        pass
+    # @staticmethod
+    # def create_aid(data:dict) -> AID
+    #     "Creats an aid from an ACL message"
+    #     return AID(data['name'])
+         
+
+    def get_aid_dict(self):
+        "Gets the aid dict format to be passed in the acl message"
+        return {
+            'name': self.name,
+            'addresses': self.addresses,
+            'resolvers': self.resolvers  
+        }
 
     def __hash__(self):
         h = hash(self.name) 
