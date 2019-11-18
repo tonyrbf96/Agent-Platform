@@ -1,7 +1,5 @@
-import hashlib
 from chord_settings import M
 from address import Address
-import asyncio
 import random
 
 
@@ -45,7 +43,7 @@ class Node:
         x = self.successor.predecessor
         if self.id < x.id < self.successor.id:
             self.successor = self
-        successor.notify(self)
+        self.successor.notify(self)
 
     # node think is might be our predecessor
     def notify(self,node:'Node'):
