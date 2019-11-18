@@ -2,7 +2,7 @@ import hashlib
 from chord_settings import M
 from address import Address
 import asyncio
-
+import random
 
 
 class Node:
@@ -34,9 +34,10 @@ class Node:
                 return self.finger[i]
         return self
 
+    '''
+    this is an old implementation with bad performance and no handling fail 
     # node self joins the network
     # 'node' is a arbitrary node in the network
-    ''' # old implementation, bad performance
     def join(self, node: 'Node'):
         if node != None:
             self.init_finger_table(node)
@@ -46,7 +47,34 @@ class Node:
             for i in range(1,M):
                 self.finger[i] = self
             self.predecessor = self
+
+    #update all nodes whose finger tables should refer to n
+    def update_others(self):
+        for i in range(1,M):
+            # find last node p whose i-esime finger might be n
+            p = self.find_predeccessor(self.id - 2**(i-1))
+            p.update_finger_table(self.id,i)
+    
+    # if s i-esime  ith finger of n, update n's finger table with s
+    def update_finger_table(self,s:'Node',i:int):
+        if self.id <= s.id <= self.finger[i].id:
+            self.finger[i] = s
+            p = self.predecessor # get first node preceding n
+            p.update_finger_table(s,i)
+    
+    # initialize finger table of local node 
+    # 'node' is an arbitrary node already in the network 
+    def init_finger_table(self,node: 'Node'):
+        self.finger[1] = node.find_successor(self.id)
+        self.predecessor = self.successor.predecessor
+        self.successor.predecessor = self #send remote call to update predecessor
+        for i in range(1,M-1):
+            if self.id <= self.finger[i+1].id <= self.finger[i].id:
+                self.finger[i+1] = self.finger[i]
+            else:
+              self.finger[i+1] = node.find_successor(self.finger[i+1].id)
     '''
+
     def join(self, node: 'Node'):
         self.predecessor = None
         self.successor = node.find_successor(self.id)
@@ -62,32 +90,15 @@ class Node:
         if self.predecessor or self.predecessor.id < node.id < self.id:
             self.predecessor = node
 
+    def fix_fingers(self):
+        i = random.randrange(1,M)
+        self.finger[i] = self.find_successor(self.finder[i].id)  
+
     
-    # initialize finger table of local node 
-    # 'node' is an arbitrary node already in the network 
-    def init_finger_table(self,node: 'Node'):
-        self.finger[1] = node.find_successor(self.id)
-        self.predecessor = self.successor.predecessor
-        self.successor.predecessor = self #send remote call to update predecessor
-        for i in range(1,M-1):
-            if self.id <= self.finger[i+1].id <= self.finger[i].id:
-                self.finger[i+1] = self.finger[i]
-            else:
-              self.finger[i+1] = node.find_successor(self.finger[i+1].id)
 
-    #update all nodes whose finger tables should refer to n
-    def update_others(self):
-        for i in range(1,M):
-            # find last node p whose i-esime finger might be n
-            p = self.find_predeccessor(self.id - 2**(i-1))
-            p.update_finger_table(self.id,i)
+    
 
-    # if s i-esime  ith finger of n, update n's finger table with s
-    def update_finger_table(self,s:'Node',i:int):
-        if self.id <= s.id <= self.finger[i].id:
-            self.finger[i] = s
-            p = self.predecessor # get first node preceding n
-            p.update_finger_table(s,i)
+    
 
     
 
