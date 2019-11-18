@@ -34,21 +34,25 @@ class Node:
                 return self.finger[i]
         return self
 
+    # node self joins the network
+    # 'node' is a arbitrary node in the network
     def join(self, node: 'Node'):
         self.predecessor = None
         self.successor = node.find_successor(self.id)
     
-    #periodically verify self's inmediate succesor and tell the successor about n
+    #periodically verify self's inmediate succesor and tell the successor about self
     def stabilize(self):
         x = self.successor.predecessor
         if self.id < x.id < self.successor.id:
             self.successor = self
         successor.notify(self)
 
+    # node think is might be our predecessor
     def notify(self,node:'Node'):
         if self.predecessor or self.predecessor.id < node.id < self.id:
             self.predecessor = node
 
+    # periodically refresh finger table entries
     def fix_fingers(self):
         i = random.randrange(1,M)
         self.finger[i] = self.find_successor(self.finder[i].id)  
