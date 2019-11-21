@@ -1,0 +1,24 @@
+version: 1
+formatters:
+  simple:
+    format: '%(asctime)s %(levelname)s - %(name)s: %(message)s'
+    datefmt: '%M:%S'
+handlers:
+  consoleHandler:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: simple
+    stream: ext://sys.stdout
+  fileHandler:
+    class: logging.FileHandler
+    level: DEBUG
+    formatter: simple
+    filename: './logs/debug.log'
+loggers:
+  debugLogger:
+    level: DEBUG
+    handlers: [consoleHandler, fileHandler]
+    propagate: no
+root:
+  level: DEBUG
+  handlers: [consoleHandler,fileHandler]
