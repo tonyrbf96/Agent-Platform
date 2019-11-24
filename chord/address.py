@@ -1,5 +1,5 @@
 import hashlib
-import chord_settings
+from chord import Node
 #this is for contain ip,port in a object
 class Address:
 	def __init__(self, ip:str, port:int):
