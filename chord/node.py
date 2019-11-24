@@ -6,7 +6,7 @@ import threading
 import time
 
 
-m = 8
+m = 16
 M = 2 ** m
 
 node_uri = 'chord.node.%s'
@@ -19,8 +19,8 @@ def repeat(sleep_time, condition : lambda *args: True):
 	def decorator(func):
 		def inner( *args, **kwargs):
 			while condition(*args):
-				time.sleep(sleep_time)
 				func( *args, **kwargs)
+				time.sleep(sleep_time)
 		return inner
 	return decorator
 
@@ -51,10 +51,10 @@ class Node:
         info('finding pyro name server...')
         with Pyro4.locateNS() as ns:
             ns.register(node_uri % self.id,self.uri, metadata=['chord-node'])
-        
         info('looking for random node...')
-        node = self #TODO find node in name server
-        self.join(node)
+        
+        with Pyro4.Proxy('pyrometa:chord-node') as node:
+            self.join(node)
         
         self.alive = True
         Thread(target=self.fix_fingers, daemon=True).start()
@@ -68,7 +68,7 @@ class Node:
     # node self joins the network
     # 'node' is a arbitrary node in the network
     def join(self, node: 'Node'):
-        info(f'joining from {node.id}')
+        info(f'Node {self.id} joining using Node {node.id}')
         self.predecessor = None
         self.successor = node.find_successor(self.id)
 
@@ -120,7 +120,7 @@ class Node:
 
 
     # periodically verify self's inmediate succesor and tell the successor about self
-    @repeat(0.5,lambda *args: args[0].alive)
+    @repeat(0.001,lambda *args: args[0].alive)
     def stabilize(self):
         #info("stabilizing...")
         node = self.successor.predecessor
@@ -133,7 +133,7 @@ class Node:
         if not self.predecessor or self.predecessor.id < node.id < self.id:
             self.predecessor = node
 
-    @repeat(0.5,lambda *args: args[0].alive)
+    @repeat(00.1,lambda *args: args[0].alive)
     # periodically refresh finger table entries
     def fix_fingers(self):
         #info("fixing fingers...")
@@ -151,6 +151,7 @@ class Node:
 
     def find(self,key):
         if self.belong(key):
+            info(f'Node {self.id} find key {key}')
             return self.data[key]
         node.self.find_successor(key)
         return node.find(key)
@@ -191,6 +192,19 @@ class FingerTable:
     def fix(self, k):
         return (self.id + 2 ** (k - 1)) % M  # return the id of the given index of this finger table
 
-node  = Node(1,'localhost',9999)
-node.start()
+import sys
+nodes = []
+for i in range(5):
+    nodes.append(Node(i*2,f'127.0.0.{1+i}',9981+i))
+    nodes[i].start()             
+
+node  = nodes[0]
+time.sleep(1)
+for n in range(len(nodes)):
+    print(f'Node {n} have succesor: {nodes[n].successor.id}')
+node.storage(5,"esto debe estar en Nodo 6")
+node.storage(3,"esto debe estar en Nodo 4")
+time.sleep(1)
+info(node.find(5))
+info(node.find(3))
 time.sleep(10)
