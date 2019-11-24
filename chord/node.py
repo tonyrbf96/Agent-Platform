@@ -1,6 +1,5 @@
 import random
 import Pyro4
-import logging
 from threading import Thread
 import threading
 import time
@@ -46,15 +45,17 @@ class Node:
         self.uri = self.pyro_daemon.register(self, node_uri % self.id)
 
     def start(self):
-        info('starting Pyro daemon...')
+        #info('starting Pyro daemon...')
         Thread(target=self.pyro_daemon.requestLoop, daemon=True).start()
-        info('finding pyro name server...')
+        #info('finding pyro name server...')
         with Pyro4.locateNS() as ns:
             ns.register(node_uri % self.id,self.uri, metadata=['chord-node'])
-        info('looking for random node...')
-        
         with Pyro4.Proxy('pyrometa:chord-node') as node:
-            self.join(node)
+            node.id
+        self.join(node)
+        #info('looking for random node...')
+        
+       
         
         self.alive = True
         Thread(target=self.fix_fingers, daemon=True).start()
@@ -70,7 +71,7 @@ class Node:
     def join(self, node: 'Node'):
         info(f'Node {self.id} joining using Node {node.id}')
         self.predecessor = None
-        self.successor = node.find_successor(self.id)
+        self.successor =  node.find_successor(self.id)
 
 
     @property
@@ -120,20 +121,20 @@ class Node:
 
 
     # periodically verify self's inmediate succesor and tell the successor about self
-    @repeat(0.001,lambda *args: args[0].alive)
+    @repeat(0.1,lambda *args: args[0].alive)
     def stabilize(self):
         #info("stabilizing...")
         node = self.successor.predecessor
-        if node and self.id < node.id < self.successor.id:
+        if node and in_interval_r(node.id,self.id,self.successor.id):
             self.successor = node
         self.successor.notify(self)
 
     # node think is might be our predecessor
     def notify(self, node: 'Node'):
-        if not self.predecessor or self.predecessor.id < node.id < self.id:
-            self.predecessor = node
+        #if not self.predecessor or self.predecessor.id < node.id < self.id: #TODO: check why is this code wrong
+        self.predecessor = node
 
-    @repeat(00.1,lambda *args: args[0].alive)
+    @repeat(0.1,lambda *args: args[0].alive)
     # periodically refresh finger table entries
     def fix_fingers(self):
         #info("fixing fingers...")
@@ -153,7 +154,7 @@ class Node:
         if self.belong(key):
             info(f'Node {self.id} find key {key}')
             return self.data[key]
-        node.self.find_successor(key)
+        node = self.find_successor(key)
         return node.find(key)
         
     def belong(self, key: int):
@@ -187,24 +188,24 @@ class FingerTable:
 
     def __setitem__(self, index, value: 'Node'):  # get node at this position
         start = self.fix(index)
-        self.fingers[index] = Finger(start, None, value.id) if value else None
+        self.fingers[index] = Finger(start, None, value.id) 
 
     def fix(self, k):
         return (self.id + 2 ** (k - 1)) % M  # return the id of the given index of this finger table
 
 import sys
 nodes = []
-for i in range(5):
+for i in range(8):
     nodes.append(Node(i*2,f'127.0.0.{1+i}',9981+i))
     nodes[i].start()             
 
 node  = nodes[0]
 time.sleep(1)
 for n in range(len(nodes)):
-    print(f'Node {n} have succesor: {nodes[n].successor.id}')
+    print(f'Node {n*2} have succesor: {nodes[n].successor.id}')
+    print(f'Node {n*2} have predecessor: {nodes[n].predecessor.id}')
 node.storage(5,"esto debe estar en Nodo 6")
 node.storage(3,"esto debe estar en Nodo 4")
 time.sleep(1)
 info(node.find(5))
 info(node.find(3))
-time.sleep(10)
