@@ -13,12 +13,12 @@ node_uri = 'chord.node.%s'
 
 
 def info(msg:str):
-    logging.info(msg)
+    print(msg)
 
-def repeat(sleep_time, condition : lambda : True):
+def repeat(sleep_time, condition : lambda *args: True):
 	def decorator(func):
 		def inner( *args, **kwargs):
-			while condition():
+			while condition(*args):
 				time.sleep(sleep_time)
 				func( *args, **kwargs)
 		return inner
@@ -33,32 +33,37 @@ def in_interval_r(x: int, a: int, b: int) -> bool:
 def in_interval_l(x: int, a: int, b: int) -> bool:
     return in_interval(x, a, b) or x == a
 
-
-
+@Pyro4.expose
 class Node:
     def __init__(self, id, ip, port):
         self.id = id
+        print(f'Node id: {self.id}')
         self.ip = ip
         self.port = port
         self.finger = FingerTable(self.id)
-        self.successor = self
         self.data = {}
         self.pyro_daemon = Pyro4.Daemon(host=self.ip, port=self.port)
-        self.uri = self.daemon.register(self, node_uri % self.id)
+        self.uri = self.pyro_daemon.register(self, node_uri % self.id)
 
     def start(self):
         info('starting Pyro daemon...')
-        Thread(target=self.daemon.requestLoop, daemon=True).start()
+        Thread(target=self.pyro_daemon.requestLoop, daemon=True).start()
+        info('finding pyro name server...')
+        with Pyro4.locateNS() as ns:
+            ns.register(node_uri % self.id,self.uri, metadata=['chord-node'])
+        
         info('looking for random node...')
-        node = None #TODO find node in name server
+        node = self #TODO find node in name server
         self.join(node)
         
+        self.alive = True
         Thread(target=self.fix_fingers, daemon=True).start()
         Thread(target=self.stabilize, daemon=True).start()
         
+        
     def __del__(self):
-        self.daemon.close()
-        pass
+        self.alive = False
+        self.pyro_daemon.close()
 
     # node self joins the network
     # 'node' is a arbitrary node in the network
@@ -66,6 +71,15 @@ class Node:
         info(f'joining from {node.id}')
         self.predecessor = None
         self.successor = node.find_successor(self.id)
+
+
+    @property
+    def id(self):
+        return self.__id
+    
+    @id.setter
+    def id(self,value):
+        self.__id = value
 
     # sefl's successor
     @property
@@ -106,11 +120,12 @@ class Node:
 
 
     # periodically verify self's inmediate succesor and tell the successor about self
-    @repeat(0.5,lambda : self.alive)
+    @repeat(0.5,lambda *args: args[0].alive)
     def stabilize(self):
-        x = self.successor.predecessor
-        if self.id < x.id < self.successor.id:
-            self.successor = self
+        #info("stabilizing...")
+        node = self.successor.predecessor
+        if node and self.id < node.id < self.successor.id:
+            self.successor = node
         self.successor.notify(self)
 
     # node think is might be our predecessor
@@ -118,11 +133,12 @@ class Node:
         if not self.predecessor or self.predecessor.id < node.id < self.id:
             self.predecessor = node
 
-    @repeat(0.5,lambda : self.alive)
+    @repeat(0.5,lambda *args: args[0].alive)
     # periodically refresh finger table entries
     def fix_fingers(self):
+        #info("fixing fingers...")
         i = random.randrange(0, m)
-        self.finger[i] = self.find_successor(self.finder[i].id)
+        self.finger[i] = self.find_successor(self.finger[i].start)
 
         # Data
 
@@ -158,17 +174,23 @@ class Finger:
 
 class FingerTable:
     def __init__(self, id):
-        self.fingers = [None for _ in range(m)]
         self.id = id
+        self.fingers = []
+        for i in range(m):
+            start = self.fix(i)
+            self.fingers.append(Finger(start, None, self.id))
+        
 
     def __getitem__(self, index):  # get node at this position
         return self.fingers[index]
 
     def __setitem__(self, index, value: 'Node'):  # get node at this position
-        start = self.fix_index(index)
+        start = self.fix(index)
         self.fingers[index] = Finger(start, None, value.id) if value else None
 
-    def fix_index(self, k):
+    def fix(self, k):
         return (self.id + 2 ** (k - 1)) % M  # return the id of the given index of this finger table
 
-
+node  = Node(1,'localhost',9999)
+node.start()
+time.sleep(10)
