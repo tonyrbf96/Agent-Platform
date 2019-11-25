@@ -5,8 +5,8 @@ import threading
 import time
 
 
-m = 16
-M = 2 ** m
+m = 8
+M = (1 << m) -1
 
 node_uri = 'chord.node.%s'
 
@@ -24,7 +24,7 @@ def repeat(sleep_time, condition : lambda *args: True):
 	return decorator
 
 def in_interval(x: int, a: int, b: int) -> bool:
-    return  x==a and x==b or a < x < b if a > b else x > a or x < b
+    return  a < x < b if a > b else x > a or x < b
 
 def in_interval_r(x: int, a: int, b: int) -> bool:
     return in_interval(x, a, b) or x == b
@@ -44,21 +44,21 @@ class Node:
         self.pyro_daemon = Pyro4.Daemon(host=self.ip, port=self.port)
         self.uri = self.pyro_daemon.register(self, node_uri % self.id)
 
-    def start(self):
+    def awake(self,node):
+        if not node:
+            node = self
         #info('starting Pyro daemon...')
         Thread(target=self.pyro_daemon.requestLoop, daemon=True).start()
         #info('finding pyro name server...')
         with Pyro4.locateNS() as ns:
             ns.register(node_uri % self.id,self.uri, metadata=['chord-node'])
-        with Pyro4.Proxy('pyrometa:chord-node') as node:
-            node.id
+        #with Pyro4.Proxy('pyrometa:chord-node') as node:
+        #   node.id
         self.join(node)
         #info('looking for random node...')
         
-       
-        
         self.alive = True
-        Thread(target=self.fix_fingers, daemon=True).start()
+        #Thread(target=self.fix_fingers, daemon=True).start()
         Thread(target=self.stabilize, daemon=True).start()
         
         
@@ -71,7 +71,7 @@ class Node:
     def join(self, node: 'Node'):
         info(f'Node {self.id} joining using Node {node.id}')
         self.predecessor = None
-        self.successor =  node.find_successor(self.id)
+        self.successor =  self if self.id == 0 else node.find_successor(self.id)
 
 
     @property
@@ -106,39 +106,47 @@ class Node:
         return p.successor
 
     # ask node self to find id's precessor
-    def find_predeccessor(self, id: int) -> 'Node':
+    def find_predeccessor(self, id: int) -> 'Node': 
+        if id == self.id:  
+            return self
+        
         node = self
-        while node.id < id <= node.successor.id:
-            node = node.closet_preceding_finger(id)  # RPC call
+        while not in_interval_r(id,node.id,node.successor.id):
+            node = node.closet_preceding_finger(id)
+            info(f'find predecessor in Node {self.id} : not {node.id}<{id}<={node.successor.id}')
         return node
 
     # return closest finger preceding id
     def closet_preceding_finger(self, id: int) -> 'Node':
-        for i in range(M, 1):
-            if self.id < self.finger[i].id < id:
-                return self.finger[i]
+        self.finger.print_fingers()
+        for i in range(m-1, 0,-1):
+            info(f'index: {i}')
+            finger_successor = self.finger[i].successor
+            if finger_successor>-1 and in_interval(finger_successor,self.id,id):
+                return self.finger[i].node
         return self
 
 
     # periodically verify self's inmediate succesor and tell the successor about self
     @repeat(0.1,lambda *args: args[0].alive)
     def stabilize(self):
-        #info("stabilizing...")
+        
         node = self.successor.predecessor
-        if node and in_interval_r(node.id,self.id,self.successor.id):
+        #info(f"Node {self.id} stabilize with Node {node.id if node else 'None'}")
+        if node and (in_interval_r(node.id,self.id,self.successor.id) or self.id == self.successor.id):
             self.successor = node
         self.successor.notify(self)
 
     # node think is might be our predecessor
     def notify(self, node: 'Node'):
-        #if not self.predecessor or self.predecessor.id < node.id < self.id: #TODO: check why is this code wrong
-        self.predecessor = node
+        if not self.predecessor or in_interval(node.id,self.predecessor.id,self.id): #TODO: check why is this code wrong
+            self.predecessor = node
 
     @repeat(0.1,lambda *args: args[0].alive)
     # periodically refresh finger table entries
     def fix_fingers(self):
         #info("fixing fingers...")
-        i = random.randrange(0, m)
+        i = random.randrange(1, m)
         self.finger[i] = self.find_successor(self.finger[i].start)
 
         # Data
@@ -163,14 +171,15 @@ class Node:
 
 
 class Finger:
-    def __init__(self, start, interval, succesor):
+    def __init__(self, start, interval, successor):
         self.start = start
         self.interval = interval
-        self.succesor = succesor
+        self.successor = successor
 
     @property
     def node(self):
-        node = Pyro4.Proxy(f"PYRONAME:{node_uri % self.succesor}")
+        info('requering finger node')
+        node = Pyro4.Proxy(f"PYRONAME:{node_uri % self.successor}")
         return node
 
 
@@ -180,32 +189,37 @@ class FingerTable:
         self.fingers = []
         for i in range(m):
             start = self.fix(i)
-            self.fingers.append(Finger(start, None, self.id))
+            self.fingers.append(Finger(start, None, -1))
+        self.print_fingers()
         
+    def print_fingers(self):
+        info(list(map(lambda f:f.successor, self.fingers)))    
 
     def __getitem__(self, index):  # get node at this position
         return self.fingers[index]
 
     def __setitem__(self, index, value: 'Node'):  # get node at this position
+        self.print_fingers()
         start = self.fix(index)
-        self.fingers[index] = Finger(start, None, value.id) 
+        self.fingers[index] = Finger(start, None, value.id)
+        self.print_fingers() 
 
     def fix(self, k):
-        return (self.id + 2 ** (k - 1)) % M  # return the id of the given index of this finger table
+        info(f'k = {k}, 2**(k-1)= {1 << (k)}')
+        return (self.id + 1 << k) % M  # return the id of the given index of this finger table
 
 import sys
 nodes = []
-for i in range(8):
-    nodes.append(Node(i*2,f'127.0.0.{1+i}',9981+i))
-    nodes[i].start()             
+for i in range(3):
+    nodes.append(Node(i,f'127.0.0.{1+i}',9971+i))
+    nodes[i].awake(nodes[i-1] if i>0 else None)             
 
 node  = nodes[0]
 time.sleep(1)
 for n in range(len(nodes)):
-    print(f'Node {n*2} have succesor: {nodes[n].successor.id}')
-    print(f'Node {n*2} have predecessor: {nodes[n].predecessor.id}')
-node.storage(5,"esto debe estar en Nodo 6")
-node.storage(3,"esto debe estar en Nodo 4")
-time.sleep(1)
-info(node.find(5))
-info(node.find(3))
+    print(f'Node {n} have succesor: {nodes[n].successor.id}')
+    print(f'Node {n} have predecessor: {nodes[n].predecessor.id}')
+'''node.storage(5,"esto debe estar en Nodo 6")
+node.storage(3,"esto debe estar en Nodo 4")'''
+'''info(node.find(5))
+info(node.find(3))'''
