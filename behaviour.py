@@ -1,6 +1,6 @@
 class Behaviour:
-    def __init__(self):
-        pass
+    def __init__(self, name):
+        self.name = name
 
     def on_start(self):
         "This method runs when the behavior starts"

@@ -1,7 +1,8 @@
 class AMSAgentDescription:
-    def __init__(self, aid, state):
+    def __init__(self, aid, state, uri):
         self.aid = aid
         self.current_state = state
+        self.uri = uri
 
     def change_to_state(self, state):
         self.current_state = state

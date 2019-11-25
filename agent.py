@@ -1,3 +1,6 @@
+from utils.aid import AID
+import Pyro4
+from threading import Thread
 
 # Agents states
 INITIATED = 0   # The Agent object is built, but hasn't registered itself yet with the AMS, has neither a name nor an address and cannot communicate with other agents.
@@ -6,26 +9,35 @@ SUSPENDED = 2   # The Agent object is currently stopped. Its internal thread is 
 WAITING = 3     # The Agent object is blocked, waiting for something. Its internal thread is sleeping and will wake up when some condition is met (typically when a  message arrives).
 DELETED = 4     # The Agent is definitely dead. The internal thread has terminated its execution and the Agent is no more registered with the AMS. 
 
-
+@Pyro4.expose
 class BaseAgent:
-    def __init__(self, aid, mts):
+    def __init__(self, mts, aid):
         self.aid = aid
-        self.behaviours = []
+        self.behaviours = {}
         self.mts = mts
-        self.name = aid.name
+        self.name = aid.localname
         self.state = INITIATED
+        self.setup()
+        self.start_serving()
 
-    def listen(self):
-         "Listens for incomming message reception"
-         pass
+    def start_serving(self):
+        print('---------------------------------')
+        localname = self.aid.localname
+        print(f'Sirviendo el agente {localname}')
+        try:
+            daemon = Pyro4.Daemon(self.aid.host, self.aid.port)
+            self.uri = daemon.register(self)
+            Thread(target=daemon.requestLoop).start()
+            return True
+        except Exception:
+            print(f'Error al arrancar el agente {localname}')
+            return False
 
-    def react(self, message):
-        """Will be executed all the times the agent
-        receives any type of data
-        """
+    def setup(self):
+        "Setups agent method"
         pass
 
-    def receive():
+    def receive(self):
         """Returns the first message of the message queue (removing it)
         or None if the message queue is empty"""
         pass
@@ -44,39 +56,28 @@ class BaseAgent:
         "Ends the execution of an agent"
         self.state = ACTIVE
 
-    def excute(self):
-        "Executes an agent behaviour"
-        print(f'Agent {self.name} starts execution')
-        msg = self.receive()
-        if msg is not None:
-            # excecutes the required behaviour of the agent
-            pass
+    def run_behaviour(self, name):
+        try:
+            b = self.behaviours[name]
+            b.on_start()
+            b.run()
+            b.on_end()
+        except KeyError:
+            raise Exception(f'El servicio solicitado: {name} no existe')
+    
+    def add_behaviour(self, b):
+        self.behaviours[b.name] = b
 
-
-    # def inform(self, angents, data):
-    #     "Handles the performative inform"
-    #     pass
-
-    # def request(self, agents, data):
-    #     "Handles the perfomative request"
-    #     pass
-
-    # def inform_if(self, agents, data):
-    #     "Handles the perfomative inform_if"
-    #     pass
-
-    # def refuse(self, agents, data):
-    #     "Handles the perfomative refuse"
-    #     pass
 
 
 class Agent(BaseAgent):
-    def __init__(self, aid, mts):
-        super().__init__(aid, mts)
+    def __init__(self, mts, name:str, addresses:list=None, resolvers:list=None):
+        super().__init__(mts, AID(name, addresses, resolvers))
         
     def register_ams(self, ams):
         "Registers the agent in a given ams"
-        pass
+        self.ams = ams
+        ams.register(self)
 
     def register_df(self, df):
         "Registers the agent in a given df"

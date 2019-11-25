@@ -48,6 +48,8 @@ class ACLMessage:
         except KeyError:
             self.data['receivers'] = [aid]
 
+    def receivers(self, receivers):
+        self.data[receivers]
 
     def get_all_receivers(self):
         "Gets all the receivers of the message"

@@ -10,16 +10,18 @@ class AID:
         self.name = name
         self.localname, address = self.name.split('@')
         self.addresses = [address]
+        if addresses:
+            self.addresses += addresses
         if ':' in address:
             self.host, self.port = address.split(':')
             self.port = int(self.port)
         else:
-            self.host, self.host = None, None
+            self.host, self.port = None, 0
 
         self.resolvers = resolvers if resolvers else list()
 
     # @staticmethod
-    # def create_aid(data:dict) -> AID
+    # def create_aid(data:dict) -> AID:
     #     "Creats an aid from an ACL message"
     #     return AID(data['name'])
          

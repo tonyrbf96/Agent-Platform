@@ -1,14 +1,20 @@
 from agent import BaseAgent
 from utils.aid import AID
+from utils.agent_descriptions import AMSAgentDescription
+from mts import MTS
+import Pyro4
 
 class AMS(BaseAgent):
     def __init__(self, host, port):
         self.aid = AID(f'ams@{host}:{port}')
-        self.agents = [] # estructura que guardará los agentes en la plataforma
+        self.host = host
+        self.port = port
+        self.agents = {} # estructura que guardará los agentes en la plataforma
+        self.mts = MTS()
 
-    def register(self, aid, state=0):
+    def register(self, agent, state=0):
         "Registers an agent in the ams"
-        pass
+        self.agents[1] = AMSAgentDescription(agent.aid, state, agent.uri)
 
     def deregister(self, aid):
         "Deregisters an agent in the ams"
@@ -20,7 +26,11 @@ class AMS(BaseAgent):
 
     def search(self, aid):
         "Searchs for the description of an agent in the ams"
-        pass
+        for ad in self.agents.values():
+            if ad.aid.name == aid.name:
+                return ad
+        raise Exception('Cannot find the agent')
+        
 
     def suspend_agent(self, aid):
         "Suspends an agent"
@@ -34,11 +44,15 @@ class AMS(BaseAgent):
         "Finishes the execution of an agent"
         pass
 
-    def create_agent(self):
-        "Creates and agent"
-        #? Not sure...
-        pass
-
-    def execute_agent(self, aid):
+    def execute_agent(self, aid, methods):
         "Excecutes the agent with the requiered aid"
-        pass
+        print('---------------------------------------')
+        print(f'Solicitando la ejecución del cliente: {aid.localname}')
+        agent_desc = self.search(aid)
+        print('Agente encontrado en el AMS, contactando con el cliente...')
+        agent = Pyro4.Proxy(agent_desc.uri)
+        print('Contactado exitosamente')
+        for meth in methods:
+            print(f'Ejecutando el método: {meth}')
+            agent.run_behaviour(meth)
+        print('Terminando')
