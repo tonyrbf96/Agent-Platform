@@ -45,6 +45,7 @@ class Node:
         self.uri = self.pyro_daemon.register(self, node_uri % self.id)
 
     def awake(self,node):
+        ""
         if not node:
             node = self
         #info('starting Pyro daemon...')
@@ -158,7 +159,7 @@ class Node:
         node = self.find_successor(key)
         node.storage(key, value)
 
-    def find(self,key):
+    def find(self, key):
         if self.belong(key):
             info(f'Node {self.id} find key {key}')
             return self.data[key]
@@ -211,7 +212,7 @@ class FingerTable:
 import sys
 nodes = []
 for i in range(3):
-    nodes.append(Node(i,f'127.0.0.{1+i}',9971+i))
+    nodes.append(Node(i, f'127.0.0.{1+i}', 9971+i))
     nodes[i].awake(nodes[i-1] if i>0 else None)             
 
 node  = nodes[0]

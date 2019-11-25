@@ -63,5 +63,5 @@ class AID:
 
     
 if __name__ == "__main__":
-    agentid1 = AID('agent-b@bar.com', resolvers=[AID('ams@foo.com', ['iiop://foo.com//acc'])])
+    agentid1 = AID('agent-b@127.0.0.1:9000', resolvers=[AID('ams@foo.com', ['iiop://foo.com//acc'])])
     print(agentid1)
