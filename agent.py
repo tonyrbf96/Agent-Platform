@@ -5,20 +5,20 @@ from threading import Thread
 # Agents states
 INITIATED = 0   # The Agent object is built, but hasn't registered itself yet with the AMS, has neither a name nor an address and cannot communicate with other agents.
 ACTIVE = 1      # The Agent object is registered with the AMS, has a regular name and address and can access all the various JADE features.
-SUSPENDED = 2   # The Agent object is currently stopped. Its internal thread is suspended and no agent behaviour is being executed
+BUSY = 2        # The Agent object is currently bussy. Some agent behaviour is being executed
 WAITING = 3     # The Agent object is blocked, waiting for something. Its internal thread is sleeping and will wake up when some condition is met (typically when a  message arrives).
 DELETED = 4     # The Agent is definitely dead. The internal thread has terminated its execution and the Agent is no more registered with the AMS. 
 
 @Pyro4.expose
 class BaseAgent:
-    def __init__(self, mts, aid):
+    def __init__(self, aid):
         self.aid = aid
         self.behaviours = {}
-        self.mts = mts
         self.name = aid.localname
         self.state = INITIATED
         self.setup()
         self.start_serving()
+        self.active_threads = []
 
     def start_serving(self):
         print('---------------------------------')
@@ -27,10 +27,12 @@ class BaseAgent:
         try:
             daemon = Pyro4.Daemon(self.aid.host, self.aid.port)
             self.uri = daemon.register(self)
+            print(f'La uri de {self.aid.name} es {self.uri}')
             Thread(target=daemon.requestLoop).start()
             return True
-        except Exception:
+        except Exception as e:
             print(f'Error al arrancar el agente {localname}')
+            print(f'Text error: {e}')
             return False
 
     def setup(self):
@@ -55,29 +57,53 @@ class BaseAgent:
     def end(self):
         "Ends the execution of an agent"
         self.state = ACTIVE
+        self.remove_inactive_behaviours()
+        # TODO: Buscar una manera de parar un hilo
+        # for t in self.active_threads:
+        #     print('Here')
+        #     t._stop()
 
-    def run_behaviour(self, name):
+    def run_behaviour(self, name, *args):
         try:
             b = self.behaviours[name]
-            b.on_start()
-            b.run()
-            b.on_end()
+            # TODO: buscar como coger el resultado de un hilo
+            t = Thread(target=self.execute_behaviour, args=(b, *args))
+            self.active_threads.append(t)
+            t.start()
         except KeyError:
-            raise Exception(f'El servicio solicitado: {name} no existe')
+            print(f'El servicio solicitado: {name} no existe')
     
+    def remove_inactive_behaviours(self):
+        "Checks all the behaviours that don't execute"
+        threads = [t for t in self.active_threads]
+        for t in threads:
+            if not t.is_alive():
+                self.active_threads.remove(t)
+
+    def execute_behaviour(self, b, *args):
+        b.on_start(*args)
+        res = b.run(*args)
+        b.on_end(*args)
+        return res
+
     def add_behaviour(self, b):
         self.behaviours[b.name] = b
 
-
-
+@Pyro4.expose
 class Agent(BaseAgent):
-    def __init__(self, mts, name:str, addresses:list=None, resolvers:list=None):
-        super().__init__(mts, AID(name, addresses, resolvers))
+    def __init__(self, name:str, addresses:list=None, resolvers:list=None):
+        super().__init__(AID(name, addresses, resolvers))
         
-    def register_ams(self, ams):
+    def register_ams(self, ams_uri):
         "Registers the agent in a given ams"
-        self.ams = ams
-        ams.register(self)
+        try:
+            ams = Pyro4.Proxy(ams_uri)
+            ams.register(self.aid.name, self.uri)
+        except Exception as e:
+            print(e)
+
+    # def register_ams(self, ams):
+    #     ams.register(self.aid.name, self.name)
 
     def register_df(self, df):
         "Registers the agent in a given df"

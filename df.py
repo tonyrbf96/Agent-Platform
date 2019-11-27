@@ -1,6 +1,7 @@
 from agent import BaseAgent
 from utils.aid import AID
 
+@Pyro4.expose
 class DF(BaseAgent):
     def __init__(self, host, port):
         self.aid = AID(f'ams@{host}:{port}')

@@ -38,6 +38,7 @@ class AID:
         h = hash(self.name) 
         for i in self.addresses + self.resolvers:
             h += hash(i)
+        return h
         
     def __str__(self):
         return self.print_depht(1)

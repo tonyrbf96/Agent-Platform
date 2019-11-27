@@ -2,11 +2,11 @@ class Behaviour:
     def __init__(self, name):
         self.name = name
 
-    def on_start(self):
+    def on_start(self, *args):
         "This method runs when the behavior starts"
         pass
 
-    def on_end(self):
+    def on_end(self, *args):
         "This method runs when the behavior stops"
         pass
 
@@ -19,7 +19,7 @@ class Behaviour:
         "Allows the behaviour to be explicitly restarted"
         pass
 
-    def run(self):
+    def run(self, *args):
         "Starts the excection of the agent"
         pass
 
