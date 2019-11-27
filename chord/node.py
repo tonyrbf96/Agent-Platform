@@ -24,7 +24,7 @@ def repeat(sleep_time, condition : lambda *args: True):
 	return decorator
 
 def in_interval(x: int, a: int, b: int) -> bool:
-    return  a < x < b if a > b else x > a or x < b
+    return  a < x < b if a < b else x > a or  x<a and x<b
 
 def in_interval_r(x: int, a: int, b: int) -> bool:
     return in_interval(x, a, b) or x == b
@@ -59,11 +59,11 @@ class Node:
         #info('looking for random node...')
         
         self.alive = True
-        #Thread(target=self.fix_fingers, daemon=True).start()
+        Thread(target=self.fix_fingers, daemon=True).start()
         Thread(target=self.stabilize, daemon=True).start()
         
         
-    def __del__(self):
+    def shutdown(self):
         self.alive = False
         self.pyro_daemon.close()
 
@@ -114,16 +114,19 @@ class Node:
         node = self
         while not in_interval_r(id,node.id,node.successor.id):
             node = node.closet_preceding_finger(id)
-            info(f'find predecessor in Node {self.id} : not {node.id}<{id}<={node.successor.id}')
+            #info(f'find predecessor in Node {self.id} : not {node.id}<{id}<={node.successor.id}')
+            #self.print_routes()
+            #node.print_routes()
         return node
 
     # return closest finger preceding id
     def closet_preceding_finger(self, id: int) -> 'Node':
-        self.finger.print_fingers()
-        for i in range(m-1, 0,-1):
-            info(f'index: {i}')
+        for i in range(m-1, -1,-1):
+            #info(f'index: {i}')
+            #self.print_routes()
             finger_successor = self.finger[i].successor
-            if finger_successor>-1 and in_interval(finger_successor,self.id,id):
+            if finger_successor and in_interval(finger_successor,self.id,id):
+                #print(f'returning {finger_successor} and confirming: {self.finger[i].node.id}')
                 return self.finger[i].node
         return self
 
@@ -146,12 +149,15 @@ class Node:
     @repeat(0.1,lambda *args: args[0].alive)
     # periodically refresh finger table entries
     def fix_fingers(self):
-        #info("fixing fingers...")
+        info("fixing fingers...")
+        self.print_routes()
         i = random.randrange(1, m)
+        print(f'random: {i}' )
         self.finger[i] = self.find_successor(self.finger[i].start)
+        self.print_routes()
 
         # Data
-
+ 
     def storage(self, key: int, value):
         if self.belong(key):
             self.data[key] = value
@@ -168,6 +174,14 @@ class Node:
         
     def belong(self, key: int):
         return in_interval(key, self.predecessor.id, self.id)
+    
+    def print_routes(self):
+        info('==================')
+        info(f'Node: {self.id}')
+        info(f'suc: {self.successor.id if self.successor else None}')
+        info(f'pred: {self.predecessor.id if self.predecessor else None}')
+        info(f'finger: {self.finger.print_fingers()}')
+        info('==================')
     # end Node
 
 
@@ -179,7 +193,7 @@ class Finger:
 
     @property
     def node(self):
-        info('requering finger node')
+        #info(f'requering finger node: {self.successor}')
         node = Pyro4.Proxy(f"PYRONAME:{node_uri % self.successor}")
         return node
 
@@ -190,37 +204,39 @@ class FingerTable:
         self.fingers = []
         for i in range(m):
             start = self.fix(i)
-            self.fingers.append(Finger(start, None, -1))
-        self.print_fingers()
+            self.fingers.append(Finger(start, None, None))
         
     def print_fingers(self):
-        info(list(map(lambda f:f.successor, self.fingers)))    
+       return list(map(lambda f:f'{f.start}:{f.successor}', self.fingers))
 
     def __getitem__(self, index):  # get node at this position
         return self.fingers[index]
 
     def __setitem__(self, index, value: 'Node'):  # get node at this position
-        self.print_fingers()
         start = self.fix(index)
         self.fingers[index] = Finger(start, None, value.id)
-        self.print_fingers() 
 
     def fix(self, k):
-        info(f'k = {k}, 2**(k-1)= {1 << (k)}')
-        return (self.id + 1 << k) % M  # return the id of the given index of this finger table
+        #info(f'k = {k}, 2**(k-1)= {1 << (k)}')
+        return (self.id + (1 << k)) % M  # return the id of the given index of this finger table
 
 import sys
+
+
 nodes = []
-for i in range(3):
-    nodes.append(Node(i, f'127.0.0.{1+i}', 9971+i))
-    nodes[i].awake(nodes[i-1] if i>0 else None)             
+for i in range(8):
+    nodes.append(Node(0 if i==0 else 1<<i-1,f'127.0.0.{1+i}',9971+i))
+    nodes[i].awake(nodes[i-1] if i>0 else None)
 
 node  = nodes[0]
-time.sleep(1)
+
+time.sleep(2)
 for n in range(len(nodes)):
-    print(f'Node {n} have succesor: {nodes[n].successor.id}')
-    print(f'Node {n} have predecessor: {nodes[n].predecessor.id}')
-'''node.storage(5,"esto debe estar en Nodo 6")
-node.storage(3,"esto debe estar en Nodo 4")'''
-'''info(node.find(5))
-info(node.find(3))'''
+    nodes[n].print_routes()
+
+nodes[6].shutdown()
+del(nodes[6])
+node.storage(14,"esto debe estar en Nodo 16")
+node.storage(65,"esto debe estar en Nodo 0")
+info(node.find(14))
+info(node.find(65))
