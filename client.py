@@ -106,7 +106,7 @@ class PlatformClient(cmd.Cmd):
             print('El nombre del agente tiene que tener el formato localname@ip:port')
             return
 
-        ams_uri = input() #jnjcnkd
+        ams_uri = input('uri del ams: ') #jnjcnkd
 
         if localname == 'dummy':
             agent = DummyAgent(agent_name)
@@ -122,7 +122,7 @@ class PlatformClient(cmd.Cmd):
         agent.register_ams(ams_uri)
     
 
-    def do_ams(self, address):
+    def do_ams(self, args):
         """
         Anade un nuevo ams a la plataforma
         Parámetros:
@@ -130,14 +130,65 @@ class PlatformClient(cmd.Cmd):
             - address2 (opcional): la dirección de la plataforma en la que se añadirá el agente.
                 Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
         """
+        params = args.split()
+        if len(params) < 1:
+            print('Por favor inserte más argumentos')
+        address1 = params[0]
+        if len(params) > 1:
+            address2 = params[1]
         try:
-            ip, port = self._parse_address(address)
+            ip, port = self._parse_address(address1)
         except Exception as e:
             print(e)
             return
         ams = AMS(ip, port)
         # TODO: anadir el ams a chord
         
+
+    def do_get_agents(self, args):
+        """
+        Obtiene el nombre de todos los agentes en la plataforma
+        Parámetros:
+            - address (opcional): la dirección de la plataforma en la que se añadirá el agente.
+                Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
+        """
+        agents = self.ams.get_agents()
+        print('Agents in the platform:', end=' ')
+        for a in agents:
+            print(a, end=' ')
+        print()
+
+
+    def do_get_service_agent(self, args):
+        """
+        Obtiene un agente que cumple determinado servicio
+        Parámetros:
+            - service_name: Nombre del servicio que se solicita
+            - platform (opcional): dirección de la plataforma en la que se añadirá el agente.
+                Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
+        """
+        pass
+
+
+    def do_execute_service(self, args):
+        """
+        Ejecuta un servicio determinado en una plataforma
+        Parámetros:
+            - service_name: Nombre del servicio que se solicita
+            - platform (opcional): dirección de la plataforma en la que se añadirá el agente.
+                Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
+        """
+        pass
+
+
+    def get_services(self, args):
+        """
+        Obtiene todos los servicios disponibles en la plataforma
+        Parámetros:
+            - platform (opcional): dirección de la plataforma en la que se añadirá el agente.
+                Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
+        """
+        pass
 
 
 if __name__ == "__main__":

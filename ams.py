@@ -35,6 +35,14 @@ class AMS(BaseAgent):
         # not important...
         pass
 
+    
+    def get_agents(self):
+        "Returns all the agent in the platform"
+        agents = []
+        for ad in self.agents.values():
+            agents.append(ad.aid)
+        # TODO: Se supone que busque por el resto de las llaves de chord
+        return agents
 
     def search(self, aid):
         "Searchs for the description of an agent in the ams"
