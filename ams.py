@@ -7,21 +7,22 @@ import Pyro4, json
 
 @Pyro4.expose
 class AMS(BaseAgent):
-    def __init__(self, host, port):
+    def __init__(self, host, port, platform):
         self.aid = AID(f'ams@{host}:{port}')
         self.host = host
         self.port = port
-        self.agents = {} # estructura que guardará los agentes en la plataforma
+        self.agents = [] # estructura que guardará los agentes en la plataforma
+        # TODO: El agente se une al anillo de Chord q le corresponde según la plataforma
         self.chord = Chord(hash(self.aid))
         self.start_serving()
         # se añade el ams al anillo de chord
 
 
-    def register(self, aid, uri, state=0):
+    def register(self, agent_name, uri, state=0):
         "Registers an agent in the ams"
+        aid = AID(agent_name, resolvers=[self.aid])
         ams_desc = AMSAgentDescription(aid, state, uri)
-        self.agents[len(self.agents)] = ams_desc
-        # #? Not sure if i can save the object in the node through pyro
+        self.agents.append(ams_desc)
         # self.chord.add(hash(aid), ams_desc.dumps())
         
 
@@ -37,22 +38,28 @@ class AMS(BaseAgent):
 
     
     def get_agents(self):
-        "Returns all the agent in the platform"
+        "Returns all the agens in the platform"
+        return self.chord.get_values()
+        
+
+    def get_local_agents(self):
+        "Returns all the agents of the ams"
         agents = []
-        for ad in self.agents.values():
-            agents.append(ad.aid)
+        for ad in self.agents:
+            agents.append(ad.aid.name)
         # TODO: Se supone que busque por el resto de las llaves de chord
         return agents
+        # return self.chord.get_local_values()
 
     def search(self, aid):
         "Searchs for the description of an agent in the ams"
-        for ad in self.agents.values():
+        for ad in self.agents:
             if ad.aid == aid:
                 return ad
-        raise Exception(f'Cannot find the agent {aid}')
+        raise Exception(f'Cannot find the agent {aid.name}')
         # try:
-        #     json_desc = self.chord.get(hash(aid))
-        #     return AMSAgentDescription.loads(json_desc)
+        #     desc = self.chord.get(hash(aid))
+        #     return AMSAgentDescription.loads(desc)
         # except:
         #     raise Exception(f'Cannot find the agent {aid}')
 
@@ -78,7 +85,7 @@ class AMS(BaseAgent):
 
     def get_agent_proxy(self, aid):
         try: 
-            print(f'Buscando el agente: {aid}')
+            print(f'Buscando el agente: {aid.name}')
             agent_desc = self.search(aid)
             print(f'Agente encontrado en el AMS, contactando con el cliente...')
             return Pyro4.Proxy(agent_desc.uri)
@@ -90,10 +97,10 @@ class AMS(BaseAgent):
     def execute_agent(self, aid, methods):
         "Excecutes the agent with the requiered aid"
         print('---------------------------------------')
-        print(f'Solicitando la ejecución del cliente: {aid}')
+        print(f'Solicitando la ejecución del cliente: {aid.name}')
         agent = self.get_agent_proxy(aid)
         if agent is None:
-            print(f'No se pudo encontrar el agent {aid} en la plataforma')
+            print(f'No se pudo encontrar el agent {aid.name} en la plataforma')
             return
         print('Contactado exitosamente')
         for meth in methods:
@@ -111,6 +118,6 @@ class AMS(BaseAgent):
     def execute_method(self, aid, method, *args):
         "Executes the agent the agent with the required aid"
         print('---------------------------------------')
-        print(f'Solicitando la ejecución del cliente: {aid}')
+        print(f'Solicitando la ejecución del cliente: {aid.name}')
         agent = self.get_agent_proxy(aid)
         return self._execute_meth(agent, method, *args)

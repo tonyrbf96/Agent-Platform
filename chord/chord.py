@@ -20,9 +20,13 @@ class Chord:
         'get value of a key located in Chord ring'
         pass
 
-    def get_values(self):
+    def get_local_values(self):
         'get local node values'
         pass
+
+
+    def get_values(self):
+        'gets all the values stored in the ring'
 
 
     def delete_key(self, key):

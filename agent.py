@@ -67,7 +67,7 @@ class BaseAgent:
         try:
             b = self.behaviours[name]
             # TODO: buscar como coger el resultado de un hilo
-            t = Thread(target=self.execute_behaviour, args=(b, *args))
+            t = Thread(target=self.execute_behaviour, args=(b, name, *args))
             self.active_threads.append(t)
             t.start()
         except KeyError:
@@ -80,19 +80,17 @@ class BaseAgent:
             if not t.is_alive():
                 self.active_threads.remove(t)
 
-    def execute_behaviour(self, b, *args):
-        b.on_start(*args)
-        res = b.run(*args)
-        b.on_end(*args)
-        return res
+    def execute_behaviour(self, behaviour, name, *args):
+        b = behaviour(name) 
+        return b.run(*args)
 
-    def add_behaviour(self, b):
-        self.behaviours[b.name] = b
+    def add_behaviour(self, name, b):
+        self.behaviours[name] = b
 
 @Pyro4.expose
 class Agent(BaseAgent):
-    def __init__(self, name:str, addresses:list=None, resolvers:list=None):
-        super().__init__(AID(name, addresses, resolvers))
+    # def __init__(self, aid):
+        # super().__init__(AID(name, addresses, resolvers))
         
     def register_ams(self, ams_uri):
         "Registers the agent in a given ams"

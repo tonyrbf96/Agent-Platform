@@ -2,6 +2,7 @@ from ams import AMS
 from test_agents import *
 import socket
 import cmd
+from utils.aid import AID
 
 
 class PlatformClient(cmd.Cmd):
@@ -35,7 +36,7 @@ class PlatformClient(cmd.Cmd):
             return
 
         # TODO: hacer lo necesario para inicializar la plataforma...
-        self.ams = AMS(ip, port)
+        self.ams = AMS(ip, port, '')
 
 
     def do_execute(self, args):
@@ -52,10 +53,16 @@ class PlatformClient(cmd.Cmd):
             return
         
         agent_name = params[0] 
+        try:
+            aid = AID(agent_name)
+        except ValueError:
+            print('El nombre del agente tiene que tener el formato localname@ip:port')
+            return
+        
         methods = params[1:-1]
         platform = params[-1]
         try:
-            self.ams.execute_agent(agent_name, methods)
+            self.ams.execute_agent(aid, methods)
         except Exception as e:
             print(e)
 
@@ -69,20 +76,33 @@ class PlatformClient(cmd.Cmd):
             - platform: dirección de la plataforma en la que se añadirá el agente.
         """
         params = args.split()
-        if len(params) < 4:
+        if len(params) < 3:
             print('Faltan parámetros')
             return
 
         agent_name = params[0]
+        try:
+            aid = AID(agent_name)
+        except ValueError:
+            print('El nombre del agente tiene que tener el formato localname@ip:port')
+            return
+
         method = params[1]
-        args = params[2:-1]
+        if len(params) > 3:
+            args = params[2:-1]
+        else:
+            args = None
         plataform = params[-1]
         try:
-            res = self.ams.execute_method(agent_name, method, *args)
+            if args:
+                res = self.ams.execute_method(aid, method, *args)
+            else:
+                res = self.ams.execute_method(aid, method)
             if res is not None:
                 print(f'El resultado del método ejecutado es {res}')
         except Exception as e:
             print(e)
+
 
     def do_agent(self, args):
         """
@@ -100,22 +120,21 @@ class PlatformClient(cmd.Cmd):
             print('Debe especificar el nombre de un agente')
             return
         try:
-            localname, address = agent_name.split('@')
-            ip, port = address.split(':')
+            aid = AID(agent_name)
         except ValueError:
             print('El nombre del agente tiene que tener el formato localname@ip:port')
             return
 
         ams_uri = input('uri del ams: ') #jnjcnkd
 
-        if localname == 'dummy':
-            agent = DummyAgent(agent_name)
-        elif localname == 'fibonacci':
-            agent = FibonacciAgent(agent_name)
-        elif localname == 'prime':
-            agent = PrimeAgent(agent_name)
-        elif localname == 'binary':
-            agent = BinaryToDecimalAgent(agent_name)
+        if aid.localname == 'dummy':
+            agent = DummyAgent(aid)
+        elif aid.localname == 'fibonacci':
+            agent = FibonacciAgent(aid)
+        elif aid.localname == 'prime':
+            agent = PrimeAgent(aid)
+        elif aid.localname == 'binary':
+            agent = BinaryToDecimalAgent(aid)
         else:
             print('No se encuentra el agente solicitado')
             return
@@ -141,7 +160,7 @@ class PlatformClient(cmd.Cmd):
         except Exception as e:
             print(e)
             return
-        ams = AMS(ip, port)
+        ams = AMS(ip, port, address2)
         # TODO: anadir el ams a chord
         
 
@@ -154,6 +173,21 @@ class PlatformClient(cmd.Cmd):
         """
         agents = self.ams.get_agents()
         print('Agents in the platform:', end=' ')
+        for a in agents:
+            print(a, end=' ')
+        print()
+
+
+    def do_get_ams_agents(self, args):
+        """
+        Obtiene el nombre de los agentes registrados en un ams especifico
+        Parámetros:
+            - address1: la dirección del ams
+            - address2 (opcional): la dirección de la plataforma en la que se añadirá el agente.
+                Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
+        """
+        agents = self.ams.get_local_agents()
+        print('Agents in the platform:')
         for a in agents:
             print(a, end=' ')
         print()

@@ -1,7 +1,7 @@
 import json
 
 class AID:
-    def __init__(self, name:str, addresses:list=None, resolvers:list=None):
+    def __init__(self, name:str, resolvers:list=None):
         """
         Agent Identifier
         name: localname@address:port
@@ -10,21 +10,11 @@ class AID:
         self.name = name
         self.localname, address = self.name.split('@')
         self.addresses = [address]
-        if addresses:
-            self.addresses += addresses
-        if ':' in address:
-            self.host, self.port = address.split(':')
-            self.port = int(self.port)
-        else:
-            self.host, self.port = None, 0
-
+        self.host, self.port = address.split(':')
+        self.port = int(self.port)
+        
         self.resolvers = resolvers if resolvers else list()
 
-    # @staticmethod
-    # def create_aid(data:dict) -> AID:
-    #     "Creats an aid from an ACL message"
-    #     return AID(data['name'])
-         
 
     def get_aid_dict(self):
         "Gets the aid dict format to be passed in the acl message"
@@ -38,8 +28,12 @@ class AID:
         h = hash(self.name) 
         for i in self.addresses + self.resolvers:
             h += hash(i)
+        a = ''
         return h
         
+    def __eq__(self, other):
+        return self.name == other.name
+
     def __str__(self):
         return self.print_depht(1)
 

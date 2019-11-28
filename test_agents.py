@@ -1,24 +1,40 @@
-import Pyro4
 from agent import Agent
 from behaviour import Behaviour
 from ams import AMS
 import time
 
+class HelloWorldAgent(Agent):
+    class HelloBehav(Behaviour):
+        def run(self):
+            print('Hello World!')
+    
+    def setup(self):
+        print('---------------------------------')
+        print('Iniciando el agente Hello World...')
+        self.add_behaviour('hello_world', self.HelloBehav)
+
+
+class EchoAgent(Agent):
+    class EchoBehav(Behaviour):
+        def run(self):
+            while True:
+                text = input()
+                print(text)
+
+    def setup(self):
+        print('---------------------------------')
+        print('Iniciando el agente Echo...')
+        self.add_behaviour('echo', self.EchoBehav)
+
+
 class DummyAgent(Agent):
     class MyBehav(Behaviour):
-        def on_start(self):
-            print('Iniciando servicio...')
-            self.counter = 0
-
         def run(self):
             self.counter = 1
             while True:
                 print(f'Contador: {self.counter}')
                 self.counter +=1
                 time.sleep(1)
-
-        def on_end(self):
-            self.counter = 0
 
     class OtherBehav(Behaviour):
         def run(self):
@@ -27,8 +43,8 @@ class DummyAgent(Agent):
     def setup(self):
         print('------------------------------')
         print('Iniciando el agente Dummy...')
-        self.add_behaviour(self.MyBehav('behaviour1'))
-        self.add_behaviour(self.OtherBehav('behaviour2'))
+        self.add_behaviour('behaviour1', self.MyBehav)
+        self.add_behaviour('behaviour2', self.OtherBehav)
 
 
 class FibonacciAgent(Agent):
@@ -51,7 +67,7 @@ class FibonacciAgent(Agent):
     def setup(self):
         print('---------------------------')
         print('Iniciando el agente Fibonacci...')
-        self.add_behaviour(self.FiboBehav('fibonacci'))
+        self.add_behaviour('fibonacci', self.FiboBehav)
 
 
 class PrimeAgent(Agent):
@@ -72,7 +88,7 @@ class PrimeAgent(Agent):
     def setup(self):
         print('--------------------------')
         print('Iniciando el agente Prime...') 
-        self.add_behaviour(self.IsPrimeBehav('is_prime'))    
+        self.add_behaviour('is_prime', self.IsPrimeBehav)    
 
 
 class BinaryToDecimalAgent(Agent):
@@ -87,4 +103,4 @@ class BinaryToDecimalAgent(Agent):
     def setup(self):
         print('--------------------------')
         print('Iniciando el agente BinaryToDecimal...') 
-        self.add_behaviour(self.ConvertToDecimal('convert_to_dec'))
+        self.add_behaviour('binary_to_decimal', self.ConvertToDecimal)

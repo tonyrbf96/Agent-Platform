@@ -2,14 +2,6 @@ class Behaviour:
     def __init__(self, name):
         self.name = name
 
-    def on_start(self, *args):
-        "This method runs when the behavior starts"
-        pass
-
-    def on_end(self, *args):
-        "This method runs when the behavior stops"
-        pass
-
     def block(self): 
         """Blocks the behaviour until some event happens 
         (typically, until a message arrives)"""
