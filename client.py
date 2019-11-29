@@ -3,7 +3,8 @@ from test_agents import *
 import socket
 import cmd
 from utils.aid import AID
-
+from platform import get_platform, initialize_servers
+import Pyro4
 
 class PlatformClient(cmd.Cmd):
     def __init__(self, *args, **kwargs):
@@ -22,6 +23,15 @@ class PlatformClient(cmd.Cmd):
             raise Exception('El puerto debe ser un número válido')
         return ip, port
 
+    
+    def _get_ams(self, address):
+        "Gets an ams from a given address that represents a platform"
+        ip, port = self._parse_address(platform)
+        platform = get_platform(ip, port)
+    
+        ams_uri = platform.get_node()
+        return Pyro4.Proxy(ams_uri)
+
 
     def do_platform(self, args):
         """
@@ -35,7 +45,9 @@ class PlatformClient(cmd.Cmd):
             print(e)
             return
 
-        # TODO: hacer lo necesario para inicializar la plataforma...
+        self.platforms = initialize_servers(ip, port)
+        self.ip, self.port = ip, port
+        # TODO: anadir los primeros ams en la plataforma...
         self.ams = AMS(ip, port, '')
 
 
@@ -62,7 +74,8 @@ class PlatformClient(cmd.Cmd):
         methods = params[1:-1]
         platform = params[-1]
         try:
-            self.ams.execute_agent(aid, methods)
+            ams = self._get_ams(platform)
+            ams.execute_agent(aid, methods)
         except Exception as e:
             print(e)
 
@@ -92,12 +105,12 @@ class PlatformClient(cmd.Cmd):
             args = params[2:-1]
         else:
             args = None
-        plataform = params[-1]
         try:
+            ams = self._get_ams(platform)
             if args:
-                res = self.ams.execute_method(aid, method, *args)
+                res = ams.execute_method(aid, method, *args)
             else:
-                res = self.ams.execute_method(aid, method)
+                res = ams.execute_method(aid, method)
             if res is not None:
                 print(f'El resultado del método ejecutado es {res}')
         except Exception as e:
@@ -114,8 +127,9 @@ class PlatformClient(cmd.Cmd):
 
         Agentes Disponibles: dummy, fibonacci, prime, binary
         """
+        params = args.split()
         try:
-            agent_name = args.split()[0]
+            agent_name = params[0]
         except IndexError:
             print('Debe especificar el nombre de un agente')
             return
@@ -124,7 +138,21 @@ class PlatformClient(cmd.Cmd):
         except ValueError:
             print('El nombre del agente tiene que tener el formato localname@ip:port')
             return
-
+        
+        if len(params) > 1:
+            platform = params[1]
+        else:
+            if not self.platforms:
+                print('No se ha creado una plataforma local')
+                return
+            platform = f'{self.ip}:{self.port}'
+        
+        try:
+            ams = self._get_ams(platform) 
+        except Exception as e:
+            print(e)
+            return
+        
         ams_uri = input('uri del ams: ') #jnjcnkd
 
         if aid.localname == 'dummy':
@@ -138,6 +166,8 @@ class PlatformClient(cmd.Cmd):
         else:
             print('No se encuentra el agente solicitado')
             return
+        
+        # TODO: pasar el proxy del ams en vez de la uri
         agent.register_ams(ams_uri)
     
 
@@ -155,13 +185,26 @@ class PlatformClient(cmd.Cmd):
         address1 = params[0]
         if len(params) > 1:
             address2 = params[1]
+        else:
+            if not self.platforms:
+                print('No se ha creado una plataforma local')
+                return
+            address2 = f'{self.ip}:{self.port}'
+        
         try:
             ip, port = self._parse_address(address1)
         except Exception as e:
             print(e)
             return
+        
         ams = AMS(ip, port, address2)
-        # TODO: anadir el ams a chord
+        try:
+            platform = get_platform(self.ip, self.port)
+            platform.register(ams.uri)
+        except Exception as e:
+            print(e)
+            return
+
         
 
     def do_get_agents(self, args):
@@ -171,7 +214,22 @@ class PlatformClient(cmd.Cmd):
             - address (opcional): la dirección de la plataforma en la que se añadirá el agente.
                 Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
         """
-        agents = self.ams.get_agents()
+        params = args.split()
+        if params:
+            platform = params[0]
+        else:
+            if not self.platforms:
+                print('No se ha creado una plataforma local')
+                return
+            platform = f'{self.ip}:{self.port}'
+            
+        try:
+            ams = self._get_ams(platform)
+        except Exception as e:
+            print(e)
+            return
+
+        agents = ams.get_agents()
         print('Agents in the platform:', end=' ')
         for a in agents:
             print(a, end=' ')
@@ -186,8 +244,28 @@ class PlatformClient(cmd.Cmd):
             - address2 (opcional): la dirección de la plataforma en la que se añadirá el agente.
                 Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
         """
-        agents = self.ams.get_local_agents()
-        print('Agents in the platform:')
+        params = args.split()
+        if params:
+            try:
+                ip, port = self._parse_address(params[0])
+            except Exception as e:
+                print(e)
+                return   
+        else:
+            if not self.platforms:
+                print('No se ha creado una plataforma local')
+                return
+            ip, port = self.ip, self.port
+            
+        try:
+            platform = get_platform(ip, port)
+            ams = platform[f'ams@{ip}:{port}']
+        except Exception as e:
+            print(e)
+            return
+
+        agents = ams.get_local_agents()
+        print('Agents in the ams:')
         for a in agents:
             print(a, end=' ')
         print()
