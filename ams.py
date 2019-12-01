@@ -13,7 +13,7 @@ class AMS(BaseAgent):
         self.port = port
         self.agents = [] # estructura que guardará los agentes en la plataforma
         # TODO: El agente se une al anillo de Chord q le corresponde según la plataforma
-        self.chord = Chord(hash(self.aid))
+        self.chord = Chord(hash(self.aid), host, port)
         self.start_serving()
         # se añade el ams al anillo de chord
 
@@ -39,16 +39,14 @@ class AMS(BaseAgent):
     
     def get_agents(self):
         "Returns all the agens in the platform"
-        return self.chord.get_values()
+        # TODO: Se supone que busque por el resto de las llaves de chord
+        return [ad.aid.name for ad in self.agents]
+        # return self.chord.get_values()
         
 
     def get_local_agents(self):
         "Returns all the agents of the ams"
-        agents = []
-        for ad in self.agents:
-            agents.append(ad.aid.name)
-        # TODO: Se supone que busque por el resto de las llaves de chord
-        return agents
+        return [ad.aid.name for ad in self.agents]
         # return self.chord.get_local_values()
 
     def search(self, aid):

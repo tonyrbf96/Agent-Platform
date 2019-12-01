@@ -105,7 +105,7 @@ class Node:
         self.__predecessor = value
 
     def find_successor(self, id: int) -> 'Node':
-        "Find id's successor if Ring"
+        "Find id's successor in Ring"
         p = self.find_predeccessor(id)
         return p.successor
 
@@ -233,30 +233,31 @@ class FingerTable:
         return (self.id + (1 << k)) % M
 
 
-nodes = []
+if __name__ == "__main__": 
+    nodes = []
 
 
-def print_all():
-    for n in nodes:
-        n.print_info()
+    def print_all():
+        for n in nodes:
+            n.print_info()
 
-print(in_interval(30,30,0 ))
-for i in range(7):
-    nodes.append(
-        Node(
-            0 if i == 0 else i * 10,
-            f'127.0.0.{1+i}',
-            9971 + i))
-    nodes[i].awake(nodes[i - 1] if i > 0 else None)
-    time.sleep(.5)
-    for d in range(5):
-        nodes[i].save(i * 10 + 1+d, '')
+    print(in_interval(30,30,0 ))
+    for i in range(7):
+        nodes.append(
+            Node(
+                0 if i == 0 else i * 10,
+                f'127.0.0.{1+i}',
+                9971 + i))
+        nodes[i].awake(nodes[i - 1] if i > 0 else None)
+        time.sleep(.5)
+        for d in range(5):
+            nodes[i].save(i * 10 + 1+d, '')
 
 
 
-time.sleep(10)
-for n in range(len(nodes)):
-    nodes[n].print_info()
+    time.sleep(10)
+    for n in range(len(nodes)):
+        nodes[n].print_info()
 
-# info(node.load(14))
-# info(node.load(65))
+    # info(node.load(14))
+    # info(node.load(65))

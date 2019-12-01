@@ -2,20 +2,25 @@ class Boostrap:
     def __init__(self):
         self.table = {}
 
+
+    def __iter__(self):
+        for k, v in self.table.items():
+            yield k, v
+
     def register(self, name, uri):
         "Registers a node in the boostrap"
         print('---------------------------------------------------')
-        print(f'Registrando name:{name}, uri:{uri}')
-        if id_ in self.table:
-            print(f'No se pudo registrar name:{name}, uri:{uri}')
-            return False, None
+        print(f'Registrando name: {name}, uri: {uri}')
+        if name in self.table:
+            print(f'No se pudo registrar name: {name}, uri: {uri}')
+            return False
 
-        r_uri = None
-        if self.table:  # len(self.table) > 0
-            r_uri = self.get_node()
+        # r_uri = None
+        # if self.table:
+        #     r_uri = self.get_node()
         self.table[name] = uri
-        print(f'Registrado con éxito:{name}, uri:{uri}')
-        return True, r_uri
+        print(f'Registrado con éxito: {name}, uri: {uri}')
+        return True
 
 
     def is_registered(self, name, uri):
