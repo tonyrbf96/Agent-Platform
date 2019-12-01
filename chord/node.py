@@ -120,6 +120,7 @@ class Node:
         while not in_interval_r(id, node.id, node_successor.id):
             with proxy(node) as remote:
                 node = remote.closet_preceding_finger(id)
+            with proxy(node) as remote:
                 node_successor = remote.successor
         return node
 
@@ -230,7 +231,7 @@ class Finger:
 
     @property
     def id(self):
-        return self.node.id
+        return self.node.id if self.node else None
 
 
 class FingerTable:
