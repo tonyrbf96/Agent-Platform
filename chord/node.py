@@ -1,4 +1,3 @@
-from nodeinfo import NodeInfo
 
 import random
 import Pyro4
@@ -38,6 +37,11 @@ def in_interval_l(x: int, a: int, b: int) -> bool:
     return in_interval(x, a, b) or x == a
 
 
+def proxy(node: 'NodeInfo'):
+    'Pyro Proxy to that node'
+    return Pyro4.Proxy(Node.URI(node.id, node.ip, node.port))
+
+
 @Pyro4.expose
 class Node:
     def __init__(self, id, ip, port):
@@ -74,7 +78,7 @@ class Node:
     def join(self, node: 'NodeInfo'):
         "node self joins the network node is a arbitrary node in the network"
         self.predecessor = None
-        with Node.proxy(node) as remote:
+        with proxy(node) as remote:
             self.successor = remote.find_successor(self.id)
 
     @property
@@ -102,7 +106,7 @@ class Node:
     def find_successor(self, id: int) -> 'NodeInfo':
         "Find id's successor if Ring"
         node = self.find_predeccessor(id)
-        with Node.proxy(node) as remote:
+        with proxy(node) as remote:
             return remote.successor
 
     def find_predeccessor(self, id: int) -> 'NodeInfo':
@@ -111,15 +115,18 @@ class Node:
             return self.info
 
         node = self.info
-        with Node.proxy(node) as remote:
-            while not in_interval_r(id, node.id, remote.successor.id):
+        node_successor = self.successor
+
+        while not in_interval_r(id, node.id, node_successor.id):
+            with proxy(node) as remote:
                 node = remote.closet_preceding_finger(id)
+                node_successor = remote.successor
         return node
 
     def closet_preceding_finger(self, id: int) -> 'NodeInfo':
         "Return closest finger preceding this id"
         for i in range(m - 1, -1, -1):
-            if self.finger[i].id and in_interval(
+            if self.finger[i].node and in_interval(
                     self.finger[i].id, self.id, id):
                 return self.finger[i].node
         return self
@@ -127,7 +134,7 @@ class Node:
     @repeat(0.25, lambda *args: args[0].alive)
     def stabilize(self):
         "Periodically verify node's inmediate succesor and tell the successor about it"
-        with Node.proxy(self.successor) as remote:
+        with proxy(self.successor) as remote:
             node = remote.predecessor
             if node and in_interval_r(
                     node.id, self.id, self.successor.id):
@@ -149,16 +156,13 @@ class Node:
                 k: v for k,
                 v in self.data.items() if k not in pred_data}
             # send data to predecessor node
-            with Node.proxy(self.predecessor) as remote:
+            with proxy(self.predecessor) as remote:
                 remote.set_data(pred_data)
 
     @repeat(0.25, lambda *args: args[0].alive)
     def fix_fingers(self):
         "Periodically refresh finger table entries"
         i = random.randrange(1, m)
-        # if self.id==90: info(f'Fixing fingers at  {i} and adding
-        # successor of {self.finger[i].start} result in
-        # {self.find_successor(self.finger[i].start)} ')
         self.finger[i] = self.find_successor(self.finger[i].start)
 
     def set_data(self, data):
@@ -167,14 +171,16 @@ class Node:
 
     def save(self, key: int, value):
         node = self.find_successor(key)
-        node.set_item(key, value)
+        with proxy(node) as remote:
+            remote.set_item(key, value)
 
     def set_item(self, key, value):
         self.data[key] = value
 
     def load(self, key):
         node = self.find_successor(key)
-        return node.get_item(key)
+        with proxy(node) as remote:
+            return remote.get_item(key)
 
     def get_item(self, key):
         return self.data[key] if self.data.__contains__(key) else None
@@ -185,9 +191,10 @@ class Node:
 
     def print_info(self):
         info(f'========  Node: {self.id}  =========')
+
         info(f'suc: {self.successor.id if self.successor else None}')
-        info(
-            f'pred: {self.predecessor.id if self.predecessor else None}')
+        info(f'pred: {self.predecessor.id if self.predecessor else None}')
+
         info(f'finger: {self.finger.print_fingers()}')
         info(f'data: {self.data}')
         info('========= END =========')
@@ -200,19 +207,16 @@ class Node:
     def Name(id: int) -> str:
         return f'ChordNode-{id}'
 
-    @staticmethod
-    def proxy(node: 'NodeInfo'):
-        return Pyro4.Proxy(Node.URI(node.id, node.ip, node.port))
-
 
 ######################################################################
 class NodeInfo:
     'Represent a ChordNode information necesary to create proxies'
-    def __init__(self, id:int, ip:str, port:int):
+
+    def __init__(self, id: int, ip: str, port: int):
         self.id = id
         self.ip = ip
         self.port = port
-        
+
 
 class Finger:
     def __init__(self, start, node):
@@ -254,6 +258,11 @@ class FingerTable:
 
 
 ######################################################################
+
+Pyro4.config.SERIALIZER = 'pickle'
+Pyro4.config.SERIALIZERS_ACCEPTED = {
+    'serpent', 'json', 'marshal', 'pickle'}
+
 nodes = []
 
 
@@ -262,7 +271,7 @@ def print_all():
         n.print_info()
 
 
-info = None
+node_info = None
 
 for i in range(7):
     nodes.append(
@@ -270,8 +279,8 @@ for i in range(7):
             i * 10,
             f'127.0.0.{1+i}',
             9990 + i))
-    nodes[i].start_serving(info)
-    info = nodes[i].info
+    nodes[i].start_serving(node_info)
+    node_info = nodes[i].info
     time.sleep(.2)
 
 
