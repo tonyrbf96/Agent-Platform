@@ -1,5 +1,6 @@
 #!/bin/bash
 # for use xterm execute: sudo apt-get install xterm
+# then: ./test.sh create 10 9000
 
 create(){
 for (( i=0; i<$1; i++ )); do
