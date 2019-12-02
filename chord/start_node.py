@@ -43,10 +43,16 @@ if __name__ =='__main__':
         while node:
             command = input('>>> ')
             
-            if command == 'show':
+            if command == '' or command == 'show':
                 node.print_info()
             if command == 'quit':
                 sys.quit()
+            if command.startswith('save'):
+                keys = command.split()
+                for key in keys[1:]:
+                    node.save(int(key),'')
+            if command == 'debug':
+                print(node.__dict__)
             pass
     except:
         pass
