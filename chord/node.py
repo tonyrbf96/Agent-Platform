@@ -30,7 +30,7 @@ def repeat(sleep_time, condition: lambda *args: True):
     return decorator
 
 
-def retry_if_failure(retry_delay: float, attempts: int = 1):
+def retry_if_failure(retry_delay: float, attempts: int = 2):
     'retry call this funtion awating and give hope to in stabilization '
     def decorator(func):
         def inner(*args, **kwargs):
@@ -78,18 +78,17 @@ class Node:
         self.port = port
         self.finger = FingerTable(self.id)
         self.data = {}
-        self.pyro_daemon = Pyro4.Daemon(host=self.ip, port=self.port)
         self._successor_list = [None for _ in range(m)]
 
     def start_serving(self, node: 'NodeInfo' = None):
         '''
         node: Joint point
         '''
+        self.pyro_daemon = Pyro4.Daemon(host=self.ip, port=self.port)
         self.pyro_daemon.register(self, Node.Name(self.id))
         Thread(
             target=self.pyro_daemon.requestLoop,
             daemon=True).start()
-
         if node:
             self.join(node)
         else:
@@ -99,6 +98,7 @@ class Node:
         self.alive = True
         Thread(target=self.fix_fingers, daemon=True).start()
         Thread(target=self.stabilize, daemon=True).start()
+        Thread(target=self.stabilize_successor_list, daemon=True).start()
         
 
     def shutdown(self):
@@ -167,9 +167,10 @@ class Node:
     def closet_preceding_finger(self, id: int) -> 'NodeInfo':
         "Return closest finger preceding this id"
         for i in range(m - 1, -1, -1):
-            if self.finger[i].node and in_interval(
-                    self.finger[i].id, self.id, id):
-                return self.finger[i].node
+            node = self.finger[i].node
+            if node and is_alive(node) and in_interval(
+                    node.id, self.id, id):
+                return node
         return self.info
 
     # Stabilization
@@ -190,6 +191,8 @@ class Node:
             ss_list = remote.successor_list
             for i in range(1, m):
                 self.successor_list[i] = ss_list[i - 1]
+                
+                
                 
     @repeat(STABILIZATION_TIME*4, lambda *args: args[0].alive)
     def stabilize_successor_list(self):
@@ -227,7 +230,6 @@ class Node:
                 remote.set_data(pred_data)
 
     @repeat(STABILIZATION_TIME, lambda *args: args[0].alive)
-    @retry_if_failure(RETRY_TIME)
     def fix_fingers(self):
         "Periodically refresh finger table entries"
         i = random.randrange(1, m)
@@ -355,6 +357,9 @@ for i in range(6):
     time.sleep(.2)
 
 nodes[1].shutdown()
+nodes[3].shutdown()
+time.sleep(2)
+nodes[1].start_serving(nodes[0])
 
 # for i in range(100):
 #     r = int(random.randrange(1 << len(nodes)))
