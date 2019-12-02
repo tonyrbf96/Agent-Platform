@@ -8,7 +8,7 @@ done
 }
 
 new(){
-xterm -e bash -c "source $PWD/execute_node.sh; ./execute_node.sh run_node $1 $2; bash" &
+xterm -e bash -c "source $PWD/test.sh; ./test.sh run_node $1 $2; bash" &
 }
 
 
