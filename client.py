@@ -370,6 +370,10 @@ class PlatformClient(cmd.Cmd):
         pass
 
 
+    def do_quit(self, args):
+        "Stops the execution of the prompt"
+        return True
+
 if __name__ == "__main__":
     platform = PlatformClient()
     platform.cmdloop()
