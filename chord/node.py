@@ -4,9 +4,16 @@ import Pyro4
 from threading import Thread
 import threading
 import time
-
 m = 7
 M = (1 << m) - 1
+
+
+Pyro4.config.SERIALIZER = 'pickle'
+Pyro4.config.SERIALIZERS_ACCEPTED = {
+    'serpent', 'json', 'marshal', 'pickle'}
+
+STABILIZATION_TIME = 0.2
+RETRY_TIME = STABILIZATION_TIME * 3
 
 
 def info(msg: str):
@@ -22,24 +29,45 @@ def repeat(sleep_time, condition: lambda *args: True):
         return inner
     return decorator
 
+
+def retry_if_failure(retry_delay: float, attempts: int = 1):
+    'retry call this funtion awating and give hope to in stabilization '
+    def decorator(func):
+        def inner(*args, **kwargs):
+            for i in range(attempts):
+                try:
+                    result = func(*args, **kwargs)
+                except BaseException as error:
+                    info(f'retry {func.__name__} -> error: {error}')
+                    time.sleep(retry_delay)
+                    continue
+                return result
+            raise Exception('Tries out')
+        return inner
+    return decorator
+
 # 0 entre 10 y 6
 
 
 def in_interval(x: int, a: int, b: int) -> bool:
     return a < x < b if a < b else not b <= x <= a
 
-
 def in_interval_r(x: int, a: int, b: int) -> bool:
     return in_interval(x, a, b) or x == b
-
-
-def in_interval_l(x: int, a: int, b: int) -> bool:
-    return in_interval(x, a, b) or x == a
 
 
 def proxy(node: 'NodeInfo'):
     'Pyro Proxy to that node'
     return Pyro4.Proxy(Node.URI(node.id, node.ip, node.port))
+
+
+def is_alive( node: 'NodeInfo'):
+    try:
+        with proxy(node) as remote:
+            remote.ping()
+            return True
+    except Pyro4.errors.CommunicationError:
+        return False
 
 
 @Pyro4.expose
@@ -51,6 +79,7 @@ class Node:
         self.finger = FingerTable(self.id)
         self.data = {}
         self.pyro_daemon = Pyro4.Daemon(host=self.ip, port=self.port)
+        self._successor_list = [None for _ in range(m)]
 
     def start_serving(self, node: 'NodeInfo' = None):
         '''
@@ -70,16 +99,20 @@ class Node:
         self.alive = True
         Thread(target=self.fix_fingers, daemon=True).start()
         Thread(target=self.stabilize, daemon=True).start()
+        
 
     def shutdown(self):
         self.alive = False
         self.pyro_daemon.close()
 
+    @retry_if_failure(RETRY_TIME)
     def join(self, node: 'NodeInfo'):
         "node self joins the network node is a arbitrary node in the network"
         self.predecessor = None
         with proxy(node) as remote:
             self.successor = remote.find_successor(self.id)
+            # initialize successor_list using successor.successor_list
+            self.update_successor_list()
 
     @property
     def successor(self) -> 'NodeInfo':
@@ -103,12 +136,18 @@ class Node:
     def info(self):
         return NodeInfo(self.id, self.ip, self.port)
 
+    @property
+    def successor_list(self):
+        return self._successor_list
+
+    @retry_if_failure(RETRY_TIME)
     def find_successor(self, id: int) -> 'NodeInfo':
         "Find id's successor if Ring"
         node = self.find_predeccessor(id)
         with proxy(node) as remote:
             return remote.successor
 
+    @retry_if_failure(RETRY_TIME)
     def find_predeccessor(self, id: int) -> 'NodeInfo':
         "Find id's precessor in Ring"
         if id == self.id:
@@ -124,22 +163,45 @@ class Node:
                 node_successor = remote.successor
         return node
 
+    @retry_if_failure(RETRY_TIME)
     def closet_preceding_finger(self, id: int) -> 'NodeInfo':
         "Return closest finger preceding this id"
         for i in range(m - 1, -1, -1):
             if self.finger[i].node and in_interval(
                     self.finger[i].id, self.id, id):
                 return self.finger[i].node
-        return self
+        return self.info
 
-    @repeat(0.25, lambda *args: args[0].alive)
+    # Stabilization
+
+    def find_first_successor_alive(self) -> 'NodeInfo':
+        for i in range(m):
+            node = self.successor_list[i]
+            if node and is_alive(node):
+                return node
+            
+    
+    @retry_if_failure(RETRY_TIME)
+    def update_successor_list(self):
+        'Stabilize successor list'
+        self.successor_list[0] = self.successor
+
+        with proxy(self.successor) as remote:
+            ss_list = remote.successor_list
+            for i in range(1, m):
+                self.successor_list[i] = ss_list[i - 1]
+
+    @repeat(STABILIZATION_TIME, lambda *args: args[0].alive)
     def stabilize(self):
         "Periodically verify node's inmediate succesor and tell the successor about it"
+        if not is_alive(self.successor): # if successor fails find first alive successor in the successor list
+            self.successor = self.find_first_successor_alive()
+            
         with proxy(self.successor) as remote:
             node = remote.predecessor
-            if node and in_interval_r(
-                    node.id, self.id, self.successor.id):
+            if node and is_alive(node) and in_interval_r(node.id, self.id, self.successor.id):
                 self.successor = node
+                self.update_successor_list()
             remote.notify(self.info)
 
     def notify(self, node: 'NodeInfo'):
@@ -160,16 +222,23 @@ class Node:
             with proxy(self.predecessor) as remote:
                 remote.set_data(pred_data)
 
-    @repeat(0.25, lambda *args: args[0].alive)
+    @repeat(STABILIZATION_TIME, lambda *args: args[0].alive)
     def fix_fingers(self):
         "Periodically refresh finger table entries"
         i = random.randrange(1, m)
         self.finger[i] = self.find_successor(self.finger[i].start)
 
+    def ping(self):
+        'a simple do-nothing method for check if is this node alive in the network'
+        pass
+
+    # DATA Handling
+
     def set_data(self, data):
         "This is used for the successor node for transfer the correspondent data"
         self.data = {**self.data, **data}
 
+    @retry_if_failure(RETRY_TIME)
     def save(self, key: int, value):
         node = self.find_successor(key)
         with proxy(node) as remote:
@@ -177,7 +246,8 @@ class Node:
 
     def set_item(self, key, value):
         self.data[key] = value
-
+        
+    @retry_if_failure(RETRY_TIME)
     def load(self, key):
         node = self.find_successor(key)
         with proxy(node) as remote:
@@ -186,15 +256,12 @@ class Node:
     def get_item(self, key):
         return self.data[key] if self.data.__contains__(key) else None
 
-    # def belong(self, key: int):
-    #     'Do not use this, predecessor needed'
-    #     return in_interval(key, self.predecessor.id, self.id)
-
     def print_info(self):
         info(f'========  Node: {self.id}  =========')
 
         info(f'suc: {self.successor.id if self.successor else None}')
-        info(f'pred: {self.predecessor.id if self.predecessor else None}')
+        info(
+            f'pred: {self.predecessor.id if self.predecessor else None}')
 
         info(f'finger: {self.finger.print_fingers()}')
         info(f'data: {self.data}')
@@ -206,7 +273,7 @@ class Node:
 
     @staticmethod
     def Name(id: int) -> str:
-        return f'ChordNode-{id}'
+        return f'Node_{id}'
 
 
 ######################################################################
@@ -260,9 +327,7 @@ class FingerTable:
 
 ######################################################################
 
-Pyro4.config.SERIALIZER = 'pickle'
-Pyro4.config.SERIALIZERS_ACCEPTED = {
-    'serpent', 'json', 'marshal', 'pickle'}
+# TEST SESSION
 
 nodes = []
 
@@ -274,26 +339,24 @@ def print_all():
 
 node_info = None
 
-for i in range(7):
+for i in range(6):
     nodes.append(
         Node(
             i * 10,
-            f'127.0.0.{1+i}',
+            f'127.0.0.1',
             9990 + i))
-    nodes[i].start_serving(node_info)
-    node_info = nodes[i].info
+    nodes[i].start_serving(
+        nodes[random.randrange(i)] if i > 0 else None)
     time.sleep(.2)
 
+# nodes[1].shutdown()
 
-for i in range(100):
-    r = int(random.randrange(127))
-    node = nodes[int(r / 20)]
-    node.save(r if r % 10 != 0 else r + 1, '')
+# for i in range(100):
+#     r = int(random.randrange(1 << len(nodes)))
+#     node = nodes[int(r / 20)]
+#     node.save(r if r % 10 != 0 else r + 1, '')
 
 
-time.sleep(4)
+time.sleep(2)
 for n in range(len(nodes)):
     nodes[n].print_info()
-
-# info(node.load(14))
-# info(node.load(65))
