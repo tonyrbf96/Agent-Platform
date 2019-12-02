@@ -13,7 +13,7 @@ Pyro4.config.SERIALIZERS_ACCEPTED = {
     'serpent', 'json', 'marshal', 'pickle'}
 
 STABILIZATION_TIME = 0.2
-RETRY_TIME = STABILIZATION_TIME * 3
+RETRY_TIME = STABILIZATION_TIME * 4
 
 
 def info(msg: str):
@@ -211,22 +211,28 @@ class Node:
         # successor list
         if not is_alive(self.successor):
             self.successor = self.find_first_successor_alive()
-
-        with proxy(self.successor) as remote:
-            node = remote.predecessor
-            if node and is_alive(node) and in_interval_r(
-                    node.id, self.id, self.successor.id):
-                self.successor = node
-                self.update_successor_list()
-            try:
+            
+        try:
+            with proxy(self.successor) as remote:
+                node = remote.predecessor
+                if node and is_alive(node) and in_interval_r(
+                        node.id, self.id, self.successor.id):
+                    self.successor = node
+                    self.update_successor_list()
+        except BaseException as why:
+            print('Error in stabilize: '+ why.__cause__)
+            pass
+        
+        try:
+            with proxy(self.successor) as remote:
                 remote.notify(self.info)
-            except Pyro4.errors.ConnectionClosedError: # between remote.update_successor_list remote fails and this is fixed when this method is called again, so i just let ignore this exception for efficiency 
-                pass
+        except Pyro4.errors.ConnectionClosedError: # between remote.update_successor_list remote fails and this is fixed when this method is called again, so i just let ignore this exception for efficiency 
+            pass
 
     def notify(self, node: 'NodeInfo'):
         "Node think is might be our predecessor"
-        if not self.predecessor or in_interval(
-                node.id, self.predecessor.id, self.id):  # TODO: check why is this code wrong
+        if not self.predecessor or not is_alive(self.predecessor) or in_interval(
+                node.id, self.predecessor.id, self.id):
             self.predecessor = node
             # Transfer data to predecessor
             pred_data = dict(
@@ -276,7 +282,7 @@ class Node:
         return self.data[key] if self.data.__contains__(key) else None
 
     def print_info(self):
-        info(f'========  Node: {self.id}  =========')
+        info(f'Node: {self.id}')
 
         info(f'suc: {self.successor.id if self.successor else None}')
         info(
@@ -285,7 +291,6 @@ class Node:
             f's_list: {list(map(lambda node: node.id if node else None,self.successor_list))}')
         info(f'finger: {self.finger.print_fingers()}')
         info(f'keys: {list(map(lambda i:i[0],self.data.items()))}')
-        info('========= END =========')
 
     @staticmethod
     def URI(id: int, ip: str, port: int) -> str:
