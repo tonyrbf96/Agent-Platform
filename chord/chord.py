@@ -1,9 +1,9 @@
 
-# from chord.node import Node
+from node import Node
 
 class Chord:
     'Interface for handle chord ring'
-    def __init__(self, id):
+    def __init__(self, id:int,ip:str,port:int):
         
         pass
     
