@@ -13,7 +13,7 @@ Pyro4.config.SERIALIZERS_ACCEPTED = {
     'serpent', 'json', 'marshal', 'pickle'}
 
 STABILIZATION_TIME = 0.2
-RETRY_TIME = STABILIZATION_TIME * 3
+RETRY_TIME = STABILIZATION_TIME * 4
 
 
 def info(msg: str):
@@ -211,13 +211,18 @@ class Node:
         # successor list
         if not is_alive(self.successor):
             self.successor = self.find_first_successor_alive()
-
-        with proxy(self.successor) as remote:
-            node = remote.predecessor
-            if node and is_alive(node) and in_interval_r(
-                    node.id, self.id, self.successor.id):
-                self.successor = node
-                self.update_successor_list()
+            
+        try:
+            with proxy(self.successor) as remote:
+                node = remote.predecessor
+                if node and is_alive(node) and in_interval_r(
+                        node.id, self.id, self.successor.id):
+                    self.successor = node
+                    self.update_successor_list()
+        except BaseException as why:
+            print('Error in stabilize: '+ why.__cause__)
+            pass
+        
         try:
             with proxy(self.successor) as remote:
                 remote.notify(self.info)
