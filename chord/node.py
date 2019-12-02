@@ -190,6 +190,10 @@ class Node:
             ss_list = remote.successor_list
             for i in range(1, m):
                 self.successor_list[i] = ss_list[i - 1]
+                
+    @repeat(STABILIZATION_TIME*4, lambda *args: args[0].alive)
+    def stabilize_successor_list(self):
+        self.update_successor_list()
 
     @repeat(STABILIZATION_TIME, lambda *args: args[0].alive)
     def stabilize(self):
@@ -223,6 +227,7 @@ class Node:
                 remote.set_data(pred_data)
 
     @repeat(STABILIZATION_TIME, lambda *args: args[0].alive)
+    @retry_if_failure(RETRY_TIME)
     def fix_fingers(self):
         "Periodically refresh finger table entries"
         i = random.randrange(1, m)
@@ -262,7 +267,7 @@ class Node:
         info(f'suc: {self.successor.id if self.successor else None}')
         info(
             f'pred: {self.predecessor.id if self.predecessor else None}')
-
+        info(f's_list: {list(map(lambda node: node.id if node else None,self.successor_list))}')
         info(f'finger: {self.finger.print_fingers()}')
         info(f'data: {self.data}')
         info('========= END =========')
@@ -349,7 +354,7 @@ for i in range(6):
         nodes[random.randrange(i)] if i > 0 else None)
     time.sleep(.2)
 
-# nodes[1].shutdown()
+nodes[1].shutdown()
 
 # for i in range(100):
 #     r = int(random.randrange(1 << len(nodes)))
@@ -359,4 +364,5 @@ for i in range(6):
 
 time.sleep(2)
 for n in range(len(nodes)):
-    nodes[n].print_info()
+    if nodes[n].alive:
+        nodes[n].print_info()
