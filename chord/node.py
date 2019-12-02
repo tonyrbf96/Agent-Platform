@@ -218,15 +218,16 @@ class Node:
                     node.id, self.id, self.successor.id):
                 self.successor = node
                 self.update_successor_list()
-            try:
+        try:
+            with proxy(self.successor) as remote:
                 remote.notify(self.info)
-            except Pyro4.errors.ConnectionClosedError: # between remote.update_successor_list remote fails and this is fixed when this method is called again, so i just let ignore this exception for efficiency 
-                pass
+        except Pyro4.errors.ConnectionClosedError: # between remote.update_successor_list remote fails and this is fixed when this method is called again, so i just let ignore this exception for efficiency 
+            pass
 
     def notify(self, node: 'NodeInfo'):
         "Node think is might be our predecessor"
-        if not self.predecessor or in_interval(
-                node.id, self.predecessor.id, self.id):  # TODO: check why is this code wrong
+        if not self.predecessor or not is_alive(self.predecessor) or in_interval(
+                node.id, self.predecessor.id, self.id):
             self.predecessor = node
             # Transfer data to predecessor
             pred_data = dict(
