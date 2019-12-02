@@ -23,7 +23,7 @@ if __name__ =='__main__':
     signal.signal(signal.SIGABRT, receiveSignal)
 
    
-    
+    #id ip port of Node
     id = sys.argv[1]
     ip = sys.argv[2]
     port = sys.argv[3]
@@ -31,13 +31,14 @@ if __name__ =='__main__':
     
     node = Node(int(id),ip,int(port))
     
+    #id ip port for join point Node
     id = sys.argv[4]
     ip = sys.argv[5]
     port = sys.argv[6]
     
     node.start_serving(NodeInfo(int(id),ip,int(port)))
     
-    # this try is because when delete node the while raise an exception, this is when I kill this process
+    #this try is because when delete node the while raise an exception, this is when I kill this process
     try: 
         while node:
             command = input('>>> ')
