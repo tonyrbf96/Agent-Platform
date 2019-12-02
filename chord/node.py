@@ -276,7 +276,7 @@ class Node:
         return self.data[key] if self.data.__contains__(key) else None
 
     def print_info(self):
-        info(f'========  Node: {self.id}  =========')
+        info(f'Node: {self.id}')
 
         info(f'suc: {self.successor.id if self.successor else None}')
         info(
@@ -285,7 +285,6 @@ class Node:
             f's_list: {list(map(lambda node: node.id if node else None,self.successor_list))}')
         info(f'finger: {self.finger.print_fingers()}')
         info(f'keys: {list(map(lambda i:i[0],self.data.items()))}')
-        info('========= END =========')
 
     @staticmethod
     def URI(id: int, ip: str, port: int) -> str:
