@@ -268,7 +268,7 @@ class Node:
     @repeat(RETRY_TIME, lambda *args: True)
     def _stabilize_ensuded_data(self):
         'make a copy of it own data in the successor list store, and remove data in the node assured_data with 0 time'
-        # discount time for every data in the ensure_data dict and
+        # discount time for every data in the reinsure dict and
         # delete it if time == 0
         for key in list(self.assured_data.keys()):
             _, time = self.assured_data[key]
@@ -284,11 +284,11 @@ class Node:
                 continue
             try:
                 with proxy(node) as remote:
-                    remote.ensure_data(self.data)
+                    remote.reinsure(self.data)
             except BaseException as e:
                 print(f"error transfering data for ensure: {e}")
 
-    def ensure_data(self, data: dict):
+    def reinsure(self, data: dict):
         'save and update data into the ensured data dict'
         # add new data
         for key in list(data.keys()):
@@ -317,6 +317,7 @@ class Node:
             remote.set_item(key, value)
 
     def set_item(self, key, value):
+        print(f'set item {key}')
         self.data[key] = value
 
     @retry_if_failure(RETRY_TIME)
@@ -324,6 +325,28 @@ class Node:
         node = self.find_successor(key)
         with proxy(node) as remote:
             return remote.get_item(key)
+
+    @retry_if_failure(RETRY_TIME)
+    def delete(self, key):
+        node = self.find_successor(key)
+        with proxy(node) as remote:
+            return remote.delete_item(key)
+
+    @retry_if_failure(RETRY_TIME)
+    def delete_item(self, key):
+        print(f'deleting item {key}')
+        try:
+            self.data.pop(key)
+        except:
+            pass
+        for node in self.successor_list:
+            if node and is_alive(node):
+                with proxy(node) as remote:
+                    remote.unensure(key)
+
+    def unensure(self,key):
+        if key in self.assured_data:
+            self.assured_data.pop(key)
 
     def get_item(self, key):
         return self.data[key] if self.data.__contains__(key) else None
@@ -338,7 +361,9 @@ class Node:
             f's_list: {list(map(lambda node: node.id if node else None,self.successor_list))}')
         info(f'finger: {self.finger.print_fingers()}')
         info(f'keys: {list(map(lambda i:i[0],self.data.items()))}')
-        info(f'assured: {list(map(lambda i:i[0],self.assured_data.items()))}')
+        info(
+            f'assured: {list(map(lambda i:i[0],self.assured_data.items()))}')
+
     @staticmethod
     def URI(id: int, ip: str, port: int) -> str:
         return f"Pyro:{Node.Name(id)}@{ip}:{port}"

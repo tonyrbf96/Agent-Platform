@@ -53,6 +53,10 @@ if __name__ =='__main__':
                     node.save(int(key),'')
             if command == 'debug':
                 print(node.__dict__)
+            if command.startswith('delete'):
+                keys = command.split()
+                for key in keys[1:]:
+                    node.delete(int(key))
             pass
     except:
         pass
