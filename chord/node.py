@@ -4,6 +4,7 @@ import Pyro4
 from threading import Thread
 import threading
 import time
+
 m = 7
 M = (1 << m) - 1
 
@@ -59,23 +60,12 @@ def in_interval_r(x: int, a: int, b: int) -> bool:
     return in_interval(x, a, b) or x == b
 
 
-def proxy(node: 'NodeInfo'):
-    'Pyro Proxy to that node'
-    return Pyro4.Proxy(Node.URI(node.id, node.ip, node.port))
 
-
-def is_alive(node: 'NodeInfo'):
-    try:
-        with proxy(node) as remote:
-            remote.ping()
-            return True
-    except Pyro4.errors.CommunicationError:
-        return False
 
 
 @Pyro4.expose
 class Node:
-    def __init__(self, id, ip, port):
+    def __init__(self, id, ip, port, chord_id: str = 'default'):
         self.id = id
         self.ip = ip
         self.port = port
@@ -83,13 +73,14 @@ class Node:
         self.data = {}
         self._successor_list = [None for _ in range(m)]
         self.assured_data = {}
+        self.chord_id = chord_id
 
     def start_serving(self, node: 'NodeInfo' = None, loop=False):
         '''
         node: Joint point
         '''
         self.pyro_daemon = Pyro4.Daemon(host=self.ip, port=self.port)
-        self.pyro_daemon.register(self, Node.Name(self.id))
+        self.pyro_daemon.register(self, self.Name(self.id))
         Thread(
             target=self.pyro_daemon.requestLoop,
             daemon=True).start()
@@ -119,7 +110,7 @@ class Node:
     def join(self, node: 'NodeInfo'):
         "node self joins the network node is a arbitrary node in the network"
         self.predecessor = None
-        with proxy(node) as remote:
+        with self.proxy(node) as remote:
             self.successor = remote.find_successor(self.id)
             # initialize successor_list using successor.successor_list
             print(self.successor)
@@ -135,12 +126,12 @@ class Node:
 
     @property
     def predecessor(self) -> 'NodeInfo':
-        "Node predecessor, it is a life time proxy"
+        "Node predecessor, it is a life time self.proxy"
         return self.__predecessor
 
     @predecessor.setter
     def predecessor(self, value: 'NodeInfo'):
-        "Node predecessor, it is a life time proxy"
+        "Node predecessor, it is a life time self.proxy"
         self.__predecessor = value
 
     @property
@@ -155,7 +146,7 @@ class Node:
     def find_successor(self, id: int) -> 'NodeInfo':
         "Find id's successor if Ring"
         node = self.find_predeccessor(id)
-        with proxy(node) as remote:
+        with self.proxy(node) as remote:
             return remote.successor
 
     @retry_if_failure(RETRY_TIME)
@@ -168,9 +159,9 @@ class Node:
         node_successor = self.successor
 
         while not in_interval_r(id, node.id, node_successor.id):
-            with proxy(node) as remote:
+            with self.proxy(node) as remote:
                 node = remote.closet_preceding_finger(id)
-            with proxy(node) as remote:
+            with self.proxy(node) as remote:
                 node_successor = remote.successor
         return node
 
@@ -179,7 +170,7 @@ class Node:
         "Return closest finger preceding this id"
         for i in range(m - 1, -1, -1):
             node = self.finger[i].node
-            if node and is_alive(node) and in_interval(
+            if node and self.is_node_alive(node) and in_interval(
                     node.id, self.id, id):
                 return node
         return self.info
@@ -189,7 +180,7 @@ class Node:
     def find_first_successor_alive(self) -> 'NodeInfo':
         for i in range(m):
             node = self.successor_list[i]
-            if node and is_alive(node):
+            if node and self.is_node_alive(node):
                 return node
 
     @retry_if_failure(RETRY_TIME)
@@ -197,7 +188,7 @@ class Node:
         'Stabilize successor list'
         self.successor_list[0] = self.successor
 
-        with proxy(self.successor) as remote:
+        with self.proxy(self.successor) as remote:
             ss_list = remote.successor_list
             for i in range(1, m):
                 self.successor_list[i] = ss_list[i - 1]
@@ -205,24 +196,19 @@ class Node:
     @repeat(STABILIZATION_TIME * 5, lambda *args: True)
     def _stabilize_successor_list(self):
         self._update_successor_list()
-        # for i in range(1,m):
-        #     node = self.successor_list[i]
-        #     if not node or not is_alive(node):
-        #         with proxy(self.successor_list[i-1]) as remote:
-        #             self.successor_list[i] = remote.successor
 
     @repeat(STABILIZATION_TIME, lambda *args: True)
     def _stabilize(self):
         "Periodically verify node's inmediate succesor and tell the successor about it"
         # if successor fails find first alive successor in the
         # successor list
-        if not is_alive(self.successor):
+        if not self.is_node_alive(self.successor):
             self.successor = self.find_first_successor_alive()
 
         try:
-            with proxy(self.successor) as remote:
+            with self.proxy(self.successor) as remote:
                 node = remote.predecessor
-                if node and is_alive(node) and in_interval_r(
+                if node and self.is_node_alive(node) and in_interval_r(
                         node.id, self.id, self.successor.id):
                     self.successor = node
                     self._update_successor_list()
@@ -231,14 +217,14 @@ class Node:
             pass
 
         try:
-            with proxy(self.successor) as remote:
+            with self.proxy(self.successor) as remote:
                 remote.notify(self.info)
         except Pyro4.errors.ConnectionClosedError:  # between remote._update_successor_list remote fails and this is fixed when this method is called again, so i just let ignore this exception for efficiency
             pass
 
     def notify(self, node: 'NodeInfo'):
         "Node think is might be our predecessor"
-        if not self.predecessor or not is_alive(self.predecessor) or in_interval(
+        if not self.predecessor or not self.is_node_alive(self.predecessor) or in_interval(
                 node.id, self.predecessor.id, self.id):
             self.predecessor = node
 
@@ -257,7 +243,7 @@ class Node:
                     transference[key] = self.data.pop(key)
             # send data to predecessor node
             try:
-                with proxy(self.predecessor) as remote:
+                with self.proxy(self.predecessor) as remote:
                     remote.set_data(transference)
             except BaseException:
                 print(
@@ -280,10 +266,10 @@ class Node:
 
         # send data to successor_list
         for node in list(self.successor_list):
-            if not node or not is_alive(node):
+            if not node or not self.is_node_alive(node):
                 continue
             try:
-                with proxy(node) as remote:
+                with self.proxy(node) as remote:
                     remote.reinsure(self.data)
             except BaseException as e:
                 print(f"error transfering data for ensure: {e}")
@@ -313,7 +299,7 @@ class Node:
     @retry_if_failure(RETRY_TIME)
     def save(self, key: int, value):
         node = self.find_successor(key)
-        with proxy(node) as remote:
+        with self.proxy(node) as remote:
             remote.set_item(key, value)
 
     def set_item(self, key, value):
@@ -323,13 +309,13 @@ class Node:
     @retry_if_failure(RETRY_TIME)
     def load(self, key):
         node = self.find_successor(key)
-        with proxy(node) as remote:
+        with self.proxy(node) as remote:
             return remote.get_item(key)
 
     @retry_if_failure(RETRY_TIME)
     def delete(self, key):
         node = self.find_successor(key)
-        with proxy(node) as remote:
+        with self.proxy(node) as remote:
             return remote.delete_item(key)
 
     @retry_if_failure(RETRY_TIME)
@@ -337,14 +323,14 @@ class Node:
         print(f'deleting item {key}')
         try:
             self.data.pop(key)
-        except:
+        except BaseException:
             pass
         for node in self.successor_list:
-            if node and is_alive(node):
-                with proxy(node) as remote:
+            if node and self.is_node_alive(node):
+                with self.proxy(node) as remote:
                     remote.unensure(key)
 
-    def unensure(self,key):
+    def unensure(self, key):
         if key in self.assured_data:
             self.assured_data.pop(key)
 
@@ -364,13 +350,23 @@ class Node:
         info(
             f'assured: {list(map(lambda i:i[0],self.assured_data.items()))}')
 
-    @staticmethod
-    def URI(id: int, ip: str, port: int) -> str:
-        return f"Pyro:{Node.Name(id)}@{ip}:{port}"
+    def URI(self, id: int, ip: str, port: int) -> str:
+        return f"Pyro:{self.Name(id)}@{ip}:{port}"
 
-    @staticmethod
-    def Name(id: int) -> str:
-        return f'Node_{id}'
+    def Name(self,id) -> str:
+        return f'chord_{self.chord_id}_node_{id}_'
+
+    def proxy(self, node: 'NodeInfo'):
+        'Pyro Proxy to that node'
+        return Pyro4.Proxy(self.URI(node.id, node.ip, node.port))
+    
+    def is_node_alive(self,node: 'NodeInfo'):
+        try:
+            with self.proxy(node) as remote:
+                remote.ping()
+                return True
+        except Pyro4.errors.CommunicationError:
+            return False
 
 
 ######################################################################

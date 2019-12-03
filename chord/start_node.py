@@ -29,7 +29,7 @@ if __name__ =='__main__':
     port = sys.argv[3]
     
     
-    node = Node(int(id),ip,int(port))
+    node = Node(int(id),ip,int(port),'boostrap')
     
     #id ip port for join point Node
     id = sys.argv[4]
@@ -57,6 +57,8 @@ if __name__ =='__main__':
                 keys = command.split()
                 for key in keys[1:]:
                     node.delete(int(key))
+            if command == 'uri':
+                print(node.URI(node.id,node.ip,node.port))
             pass
     except:
         pass
