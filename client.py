@@ -12,6 +12,11 @@ class PlatformClient(cmd.Cmd):
         self.prompt = '> '
         self.platform = None
 
+    def do_EOF(self):
+        return
+
+    def emptyline(self):
+        return
 
     def _parse_address(self, args):
         "Parses an address, it returns ip, port if successfull, otherwise raises an error"
@@ -29,7 +34,6 @@ class PlatformClient(cmd.Cmd):
             raise TypeError(f'El formato del ip {ip} es incorrecto')            
       
         return ip, port
-
 
     def _check_ip(self, ip):
         "Checks a valid ip"
@@ -156,14 +160,131 @@ class PlatformClient(cmd.Cmd):
             args = params[2:-1]
         else:
             args = None
+
+        address = params[-1]
         try:
-            ams = self._get_ams(platform)
+            ams_uri = self._get_ams_uri(address)
+            ams = Pyro4.Proxy(ams_uri)
             if args:
                 res = ams.execute_method(aid, method, *args)
             else:
                 res = ams.execute_method(aid, method)
             if res is not None:
                 print(f'El resultado del método ejecutado es {res}')
+        except Exception as e:
+            print(e)
+
+
+    def change_agent_status(self, args):
+        "Helper function to change the status stop, restart or end an agent"
+        params = args.split()
+        try:
+            agent_name = params[0]
+        except IndexError:
+            print('Debe especificar el nombre de un agente.')
+            return None, None
+       
+        try:
+            aid = AID(agent_name)
+        except ValueError:
+            print('El nombre del agente tiene que tener el formato localname@ip:port')
+
+        try:
+            if len(params) > 1:
+                address = params[1]
+                ams_uri = self._get_ams_uri(address)
+            else:
+                if not self.platform:
+                    print('No se ha creado una plataforma local')
+                    return None, None
+                ams_uri  = self.platform.get_node()
+        except Exception as e:
+            print(e)
+            return None, None
+        
+        return ams_uri, aid 
+
+   
+    def do_stop_agent(self, args):
+        """
+        Para la ejecución de un agente en una plataforma determinada
+        Parámetros:
+            - agent: el nombre del agente que se inicializará (con el formato localname@ip:port)
+            - platform (opcional): dirección de la plataforma en la que se anadirá el agente.
+                Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
+        """
+        ams_uri, aid = self.change_agent_status(args)
+        if ams_uri is None or aid is None:
+            return
+
+        try:
+            ams = Pyro4.Proxy(ams_uri)
+            ams.stop_agent(aid)
+        except Exception as e:
+            print(e)
+
+
+    def do_restart_agent(self, args):
+        """
+        Resume la ejecución de un agente en una plataforma determinada
+        Parámetros:
+            - agent: el nombre del agente que se inicializará (con el formato localname@ip:port)
+            - platform (opcional): dirección de la plataforma en la que se anadirá el agente.
+                Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
+        """
+        ams_uri, aid = self.change_agent_status(args)
+        if ams_uri is None or aid is None:
+            return
+
+        try:
+            ams = Pyro4.Proxy(ams_uri)
+            ams.restart_agent(aid)
+        except Exception as e:
+            print(e)
+
+
+    def do_end_agent(self, args):
+        """
+        Termina la ejecución de un agente en una plataforma determinada
+        Parámetros:
+            - agent: el nombre del agente que se inicializará (con el formato localname@ip:port)
+            - platform (opcional): dirección de la plataforma en la que se anadirá el agente.
+                Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
+        """
+        ams_uri, aid = self.change_agent_status(args)
+        if ams_uri is None or aid is None:
+            return
+
+        try:
+            ams = Pyro4.Proxy(ams_uri)
+            ams.end_agent(aid)
+        except Exception as e:
+            print(e)
+
+
+    def do_agent_status(self, args):
+        """
+        Obtiene el estado de un agente en una plataforma determinada
+        Parámetros:
+            - agent: el nombre del agente que se inicializará (con el formato localname@ip:port)
+            - platform (opcional): dirección de la plataforma en la que se anadirá el agente.
+                Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
+        """
+        ams_uri, aid = self.change_agent_status(args)
+        if ams_uri is None or aid is None:
+            return
+
+        try:
+            ams = Pyro4.Proxy(ams_uri)
+            status = ams.get_status(aid)
+            if status == 1:
+                print(f'El agente {aid.name} está activo')
+            elif status == 2:
+                print(f'El agente {aid.name} está ejecutando al menos un servicio')
+            elif status == 3:
+                print(f'El agente {aid.name} tiene servicios detenidos')
+            elif status == 4:
+                print(f'El agente {aid.name} está caído')
         except Exception as e:
             print(e)
 
@@ -373,6 +494,7 @@ class PlatformClient(cmd.Cmd):
     def do_quit(self, args):
         "Stops the execution of the prompt"
         return True
+
 
 if __name__ == "__main__":
     platform = PlatformClient()

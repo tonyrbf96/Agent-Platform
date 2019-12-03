@@ -1,7 +1,8 @@
 from agent import Agent
-from behaviour import Behaviour
+from behaviour import Behaviour, run_cyclic
 from ams import AMS
 import time
+import threading
 
 class HelloWorldAgent(Agent):
     class HelloBehav(Behaviour):
@@ -16,8 +17,8 @@ class HelloWorldAgent(Agent):
 
 class EchoAgent(Agent):
     class EchoBehav(Behaviour):
+        @run_cyclic
         def run(self):
-            while True:
                 text = input()
                 print(text)
 
@@ -29,12 +30,14 @@ class EchoAgent(Agent):
 
 class DummyAgent(Agent):
     class MyBehav(Behaviour):
-        def run(self):
+        def on_start(self):
             self.counter = 1
-            while True:
-                print(f'Contador: {self.counter}')
-                self.counter +=1
-                time.sleep(1)
+
+        @run_cyclic
+        def run(self):
+            print(f'Contador: {self.counter}')
+            self.counter +=1
+            time.sleep(1)
 
     class OtherBehav(Behaviour):
         def run(self):
@@ -57,6 +60,8 @@ class FibonacciAgent(Agent):
                 raise Exception('Por favor, inserte un argumento válido')
             
             def fibonacci(n):
+                if self.ended: return
+                if self.stopped: self.lock.acquire()
                 if n < 2:
                     return n
                 return fibonacci(n-1) + fibonacci(n-2)
@@ -80,6 +85,9 @@ class PrimeAgent(Agent):
             if n == 1:
                 print(f'El número {n} es primo')
             for i in range(1, int(n/2)):
+                if self.ended: return
+                if self.stopped: self.lock.acquire()
+
                 if n % i == 0:
                     print(f'El número {n} no es primo')
                     return
@@ -96,6 +104,9 @@ class BinaryToDecimalAgent(Agent):
         def run(self, string):
             dec = 0
             for i in range(len(string)):
+                if self.ended: return
+                if self.stopped: self.lock.acquire()
+
                 d = int(string[i])
                 dec = dec * 2 + d
             print(f'El número en decimal de {string} es {dec}')
@@ -104,3 +115,4 @@ class BinaryToDecimalAgent(Agent):
         print('--------------------------')
         print('Iniciando el agente BinaryToDecimal...') 
         self.add_behaviour('binary_to_decimal', self.ConvertToDecimal)
+

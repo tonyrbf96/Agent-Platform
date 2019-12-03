@@ -62,24 +62,37 @@ class AMS(BaseAgent):
         #     raise Exception(f'Cannot find the agent {aid}')
 
 
-    def suspend_agent(self, aid):
-        "Suspends an agent"
-        pass
-
-
-    def resume_agent(self, aid):
-        "Resumes the execution of an agent"
-        pass
-
-
-    def end_agent(self, aid):
-        "Finishes the execution of an agent"
+    def stop_agent(self, aid):
+        "Stops an agent"
         agent = self.get_agent_proxy(aid)
-        if agent == None:
+        if agent is None:
+            return
+        agent.stop()
+
+    
+    def restart_agent(self, aid):
+        "Resumes the execution of an agent"
+        agent = self.get_agent_proxy(aid)
+        if agent is None:
+            return
+        agent.restart()
+
+    
+    def end_agent(self, aid):
+        "Ends the execution of an agent"
+        agent = self.get_agent_proxy(aid)
+        if agent is None:
             return
         agent.end()
-        print('Execution of the agent ended')
+        
     
+    def get_agent_status(self, aid):
+        "Gets the state of an agent"
+        agent = self.get_agent_proxy(aid)
+        if agent is None:
+            return
+        return agent.get_status()
+        
 
     def get_agent_proxy(self, aid):
         try: 
