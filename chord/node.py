@@ -14,6 +14,7 @@ Pyro4.config.SERIALIZERS_ACCEPTED = {
 
 STABILIZATION_TIME = 0.2
 RETRY_TIME = STABILIZATION_TIME * 4
+ASSURED_LIFE_TIME = RETRY_TIME * 4
 
 
 def info(msg: str):
@@ -38,11 +39,12 @@ def retry_if_failure(retry_delay: float, attempts: int = 3):
                 try:
                     result = func(*args, **kwargs)
                 except BaseException as error:
-                    info(f'retry {i+1}/{attempts} {func.__name__} -> error: {error}')
+                    info(
+                        f'retry {i+1}/{attempts} {func.__name__} -> error: {error}')
                     time.sleep(retry_delay)
                     continue
                 return result
-            raise Exception('Tries out')
+            raise Exception('fail retry')
         return inner
     return decorator
 
@@ -80,26 +82,33 @@ class Node:
         self.finger = FingerTable(self.id)
         self.data = {}
         self._successor_list = [None for _ in range(m)]
+        self.assured_data = {}
 
-    def start_serving(self, node: 'NodeInfo' = None,loop=False):
+    def start_serving(self, node: 'NodeInfo' = None, loop=False):
         '''
         node: Joint point
         '''
         self.pyro_daemon = Pyro4.Daemon(host=self.ip, port=self.port)
         self.pyro_daemon.register(self, Node.Name(self.id))
-        Thread(target=self.pyro_daemon.requestLoop,daemon=True).start()
-        
-        if node and node.id!=self.id:
+        Thread(
+            target=self.pyro_daemon.requestLoop,
+            daemon=True).start()
+
+        if node and node.id != self.id:
             self.join(node)
         else:
             self.predecessor = None
             self.successor = self.info
 
-        
         Thread(target=self.fix_fingers, daemon=True).start()
-        Thread(target=self.stabilize, daemon=True).start()
-        Thread(target=self.stabilize_successor_list, daemon=True).start()
-        
+        Thread(target=self._stabilize, daemon=True).start()
+        Thread(
+            target=self._stabilize_successor_list,
+            daemon=True).start()
+        Thread(
+            target=self._stabilize_ensuded_data,
+            daemon=True).start()
+
         info(f"Node {self.id} is ready")
 
     def __del__(self):
@@ -114,7 +123,7 @@ class Node:
             self.successor = remote.find_successor(self.id)
             # initialize successor_list using successor.successor_list
             print(self.successor)
-            self.update_successor_list()
+            self._update_successor_list()
 
     @property
     def successor(self) -> 'NodeInfo':
@@ -184,7 +193,7 @@ class Node:
                 return node
 
     @retry_if_failure(RETRY_TIME)
-    def update_successor_list(self):
+    def _update_successor_list(self):
         'Stabilize successor list'
         self.successor_list[0] = self.successor
 
@@ -193,11 +202,9 @@ class Node:
             for i in range(1, m):
                 self.successor_list[i] = ss_list[i - 1]
 
-    
-
     @repeat(STABILIZATION_TIME * 5, lambda *args: True)
-    def stabilize_successor_list(self):
-        self.update_successor_list()
+    def _stabilize_successor_list(self):
+        self._update_successor_list()
         # for i in range(1,m):
         #     node = self.successor_list[i]
         #     if not node or not is_alive(node):
@@ -205,28 +212,28 @@ class Node:
         #             self.successor_list[i] = remote.successor
 
     @repeat(STABILIZATION_TIME, lambda *args: True)
-    def stabilize(self):
+    def _stabilize(self):
         "Periodically verify node's inmediate succesor and tell the successor about it"
         # if successor fails find first alive successor in the
         # successor list
         if not is_alive(self.successor):
             self.successor = self.find_first_successor_alive()
-            
+
         try:
             with proxy(self.successor) as remote:
                 node = remote.predecessor
                 if node and is_alive(node) and in_interval_r(
                         node.id, self.id, self.successor.id):
                     self.successor = node
-                    self.update_successor_list()
+                    self._update_successor_list()
         except BaseException as why:
-            print('Error in stabilize: '+ why.__cause__)
+            print('Error in _stabilize: ' + why.__cause__)
             pass
-        
+
         try:
             with proxy(self.successor) as remote:
                 remote.notify(self.info)
-        except Pyro4.errors.ConnectionClosedError: # between remote.update_successor_list remote fails and this is fixed when this method is called again, so i just let ignore this exception for efficiency 
+        except Pyro4.errors.ConnectionClosedError:  # between remote._update_successor_list remote fails and this is fixed when this method is called again, so i just let ignore this exception for efficiency
             pass
 
     def notify(self, node: 'NodeInfo'):
@@ -234,18 +241,58 @@ class Node:
         if not self.predecessor or not is_alive(self.predecessor) or in_interval(
                 node.id, self.predecessor.id, self.id):
             self.predecessor = node
+
+            # Take dada from storage is needed
+            for key in list(self.assured_data.keys()):
+                if in_interval(key, self.predecessor.id, self.id):
+                    t, value = self.assured_data.pop(key)
+                    self.data[key] = value
             # Transfer data to predecessor
-            pred_data = dict(
-                filter(
-                    lambda i: i[0] < self.predecessor.id,
-                    self.data.items()))
-            # remove transfering data from node data
-            self.data = {
-                k: v for k,
-                v in self.data.items() if k not in pred_data}
+            transference = {}
+            for key in list(self.data.keys()):
+                # this interval is all the rign except this node
+                # interval, is different of key < predecessor.id
+                # because the rign is circular
+                if in_interval(key, self.id, self.predecessor.id):
+                    transference[key] = self.data.pop(key)
             # send data to predecessor node
-            with proxy(self.predecessor) as remote:
-                remote.set_data(pred_data)
+            try:
+                with proxy(self.predecessor) as remote:
+                    remote.set_data(transference)
+            except BaseException:
+                print(
+                    f'Problem sending data from {self.id} to node {self.predecessor.id}')
+                # remerge data again into this node data
+                self.data = {**self.data, **transference}
+
+    @repeat(RETRY_TIME, lambda *args: True)
+    def _stabilize_ensuded_data(self):
+        'make a copy of it own data in the successor list store, and remove data in the node assured_data with 0 time'
+        # discount time for every data in the ensure_data dict and
+        # delete it if time == 0
+        for key in list(self.assured_data.keys()):
+            _, time = self.assured_data[key]
+            time -= 1
+            value, _ = self.assured_data[key]
+            self.assured_data[key] = value, time
+            if time == 0:
+                self.assured_data.pop(key)
+
+        # send data to successor_list
+        for node in list(self.successor_list):
+            if not node or not is_alive(node):
+                continue
+            try:
+                with proxy(node) as remote:
+                    remote.ensure_data(self.data)
+            except BaseException as e:
+                print(f"error transfering data for ensure: {e}")
+
+    def ensure_data(self, data: dict):
+        'save and update data into the ensured data dict'
+        # add new data
+        for key in list(data.keys()):
+            self.assured_data[key] = data[key], ASSURED_LIFE_TIME
 
     @repeat(STABILIZATION_TIME, lambda *args: True)
     def fix_fingers(self):
@@ -291,7 +338,7 @@ class Node:
             f's_list: {list(map(lambda node: node.id if node else None,self.successor_list))}')
         info(f'finger: {self.finger.print_fingers()}')
         info(f'keys: {list(map(lambda i:i[0],self.data.items()))}')
-
+        info(f'assured: {list(map(lambda i:i[0],self.assured_data.items()))}')
     @staticmethod
     def URI(id: int, ip: str, port: int) -> str:
         return f"Pyro:{Node.Name(id)}@{ip}:{port}"
