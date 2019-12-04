@@ -29,7 +29,7 @@ if __name__ =='__main__':
     port = sys.argv[3]
     
     
-    node = Node(int(id),ip,int(port))
+    node = Node(int(id),ip,int(port),'boostrap')
     
     #id ip port for join point Node
     id = sys.argv[4]
@@ -43,10 +43,22 @@ if __name__ =='__main__':
         while node:
             command = input('>>> ')
             
-            if command == 'show':
+            if command == '' or command == 'show':
                 node.print_info()
             if command == 'quit':
                 sys.quit()
+            if command.startswith('save'):
+                keys = command.split()
+                for key in keys[1:]:
+                    node.save(int(key),'')
+            if command == 'debug':
+                print(node.__dict__)
+            if command.startswith('delete'):
+                keys = command.split()
+                for key in keys[1:]:
+                    node.delete(int(key))
+            if command == 'uri':
+                print(node.URI(node.id,node.ip,node.port))
             pass
     except:
         pass
