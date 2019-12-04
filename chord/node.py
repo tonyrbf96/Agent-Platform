@@ -4,6 +4,8 @@ import Pyro4
 from threading import Thread
 import threading
 import time
+import debug.logger as log
+
 
 m = 7
 M = (1 << m) - 1
@@ -16,10 +18,6 @@ Pyro4.config.SERIALIZERS_ACCEPTED = {
 STABILIZATION_TIME = 0.2
 RETRY_TIME = STABILIZATION_TIME * 4
 ASSURED_LIFE_TIME = RETRY_TIME * 4
-
-
-def info(msg: str):
-    print(msg)
 
 
 def repeat(sleep_time, condition: lambda *args: True):
@@ -40,12 +38,14 @@ def retry_if_failure(retry_delay: float, attempts: int = 3):
                 try:
                     result = func(*args, **kwargs)
                 except BaseException as error:
-                    info(
-                        f'retry {i+1}/{attempts} {func.__name__} -> error: {error}')
+                    log.error(
+                        f'retry {i+1}/{attempts} {func.__name__}:  {error}')
                     time.sleep(retry_delay)
                     continue
+                if i > 0:
+                    log.debug(f'resolve correctly function: {func.__name__} in attemt {i}')
                 return result
-            raise Exception('fail retry')
+            log.exception(f"can't handle exceptions with stabilization")
         return inner
     return decorator
 
@@ -60,9 +60,6 @@ def in_interval_r(x: int, a: int, b: int) -> bool:
     return in_interval(x, a, b) or x == b
 
 
-
-
-
 @Pyro4.expose
 class Node:
     def __init__(self, id, ip, port, chord_id: str = 'default'):
@@ -75,19 +72,29 @@ class Node:
         self.assured_data = {}
         self.chord_id = chord_id
 
-    def start_serving(self, node: 'NodeInfo' = None, loop=False):
+        log.init_logger(f"Node {self.id}", log.DEBUG)  # init logging
+        log.debug(f"init")
+
+    def start_serving(self, node: 'NodeInfo' = None,uri:str=None):
         '''
         node: Joint point
         '''
+        log.info(f"staring serving...")
         self.pyro_daemon = Pyro4.Daemon(host=self.ip, port=self.port)
         self.pyro_daemon.register(self, self.Name(self.id))
         Thread(
             target=self.pyro_daemon.requestLoop,
             daemon=True).start()
 
+        if not node:
+            with Pyro4.Proxy(uri) as remote:
+                node = remote.info
+                
+
         if node and node.id != self.id:
             self.join(node)
         else:
+            log.info('the entry id is the same, this is the initial node')
             self.predecessor = None
             self.successor = self.info
 
@@ -100,11 +107,11 @@ class Node:
             target=self._stabilize_ensuded_data,
             daemon=True).start()
 
-        info(f"Node {self.id} is ready")
+        log.info(f"ready and listening")
 
     def __del__(self):
-        print(self.__dict__)
         self.pyro_daemon.close()
+        log.debug('shutdown')
 
     @retry_if_failure(RETRY_TIME)
     def join(self, node: 'NodeInfo'):
@@ -113,8 +120,9 @@ class Node:
         with self.proxy(node) as remote:
             self.successor = remote.find_successor(self.id)
             # initialize successor_list using successor.successor_list
-            print(self.successor)
+            log.debug(f'finded successor: {self.successor.id}')
             self._update_successor_list()
+        log.debug(f"join to {node.id} succesfuly")
 
     @property
     def successor(self) -> 'NodeInfo':
@@ -204,6 +212,7 @@ class Node:
         # successor list
         if not self.is_node_alive(self.successor):
             self.successor = self.find_first_successor_alive()
+            log.debug(f'set new succesor from successor list: {self.successor.id}')
 
         try:
             with self.proxy(self.successor) as remote:
@@ -211,9 +220,9 @@ class Node:
                 if node and self.is_node_alive(node) and in_interval_r(
                         node.id, self.id, self.successor.id):
                     self.successor = node
+                    log.debug(f'finded new succesor: {node.id}')
                     self._update_successor_list()
         except BaseException as why:
-            print('Error in _stabilize: ' + why.__cause__)
             pass
 
         try:
@@ -227,12 +236,14 @@ class Node:
         if not self.predecessor or not self.is_node_alive(self.predecessor) or in_interval(
                 node.id, self.predecessor.id, self.id):
             self.predecessor = node
+            log.debug(f'set new predecessor: {node.id}')
 
             # Take dada from storage is needed
             for key in list(self.assured_data.keys()):
                 if in_interval(key, self.predecessor.id, self.id):
                     t, value = self.assured_data.pop(key)
                     self.data[key] = value
+                    log.debug(f'assume key assured : {key}')
             # Transfer data to predecessor
             transference = {}
             for key in list(self.data.keys()):
@@ -245,9 +256,10 @@ class Node:
             try:
                 with self.proxy(self.predecessor) as remote:
                     remote.set_data(transference)
+                    log.debug(f'set data to predecessor (node {self.predecessor.id}): {list(transference.keys())}')
             except BaseException:
-                print(
-                    f'Problem sending data from {self.id} to node {self.predecessor.id}')
+                log.exception(
+                    f'problem sending data to node {self.predecessor.id}')
                 # remerge data again into this node data
                 self.data = {**self.data, **transference}
 
@@ -272,7 +284,7 @@ class Node:
                 with self.proxy(node) as remote:
                     remote.reinsure(self.data)
             except BaseException as e:
-                print(f"error transfering data for ensure: {e}")
+                log.error(f"error transfering data for ensure to {node.id}")
 
     def reinsure(self, data: dict):
         'save and update data into the ensured data dict'
@@ -298,29 +310,32 @@ class Node:
 
     @retry_if_failure(RETRY_TIME)
     def save(self, key: int, value):
+        log.debug(f"call save key: {key}")
         node = self.find_successor(key)
         with self.proxy(node) as remote:
             remote.set_item(key, value)
 
     def set_item(self, key, value):
-        print(f'set item {key}')
+        log.info(f'recive key: {key}')
         self.data[key] = value
 
     @retry_if_failure(RETRY_TIME)
     def load(self, key):
+        log.debug(f"call load key {key}")
         node = self.find_successor(key)
         with self.proxy(node) as remote:
             return remote.get_item(key)
 
     @retry_if_failure(RETRY_TIME)
     def delete(self, key):
+        log.debug(f"call delete key {key}")
         node = self.find_successor(key)
         with self.proxy(node) as remote:
             return remote.delete_item(key)
 
     @retry_if_failure(RETRY_TIME)
     def delete_item(self, key):
-        print(f'deleting item {key}')
+        log.info(f'deleting key: {key}')
         try:
             self.data.pop(key)
         except BaseException:
@@ -335,32 +350,30 @@ class Node:
             self.assured_data.pop(key)
 
     def get_item(self, key):
+        log.info(f'returning key: {key}')
         return self.data[key] if self.data.__contains__(key) else None
 
     def print_info(self):
-        info(f'Node: {self.id}')
-
-        info(f'suc: {self.successor.id if self.successor else None}')
-        info(
-            f'pred: {self.predecessor.id if self.predecessor else None}')
-        info(
-            f's_list: {list(map(lambda node: node.id if node else None,self.successor_list))}')
-        info(f'finger: {self.finger.print_fingers()}')
-        info(f'keys: {list(map(lambda i:i[0],self.data.items()))}')
-        info(
-            f'assured: {list(map(lambda i:i[0],self.assured_data.items()))}')
-
+        log.debug(f'''
+        suc: {self.successor.id if self.successor else None}
+        pred: {self.predecessor.id if self.predecessor else None}
+        s_list: {
+            list(map(lambda node: node.id if node else None,self.successor_list))}
+        finger: {self.finger.print_fingers()}
+        keys: {list(map(lambda i:i[0],self.data.items()))}
+        assured: {list(map(lambda i:i[0],self.assured_data.items()))}''')
+        
     def URI(self, id: int, ip: str, port: int) -> str:
         return f"Pyro:{self.Name(id)}@{ip}:{port}"
 
-    def Name(self,id) -> str:
+    def Name(self, id) -> str:
         return f'chord_{self.chord_id}_node_{id}_'
 
     def proxy(self, node: 'NodeInfo'):
         'Pyro Proxy to that node'
         return Pyro4.Proxy(self.URI(node.id, node.ip, node.port))
-    
-    def is_node_alive(self,node: 'NodeInfo'):
+
+    def is_node_alive(self, node: 'NodeInfo'):
         try:
             with self.proxy(node) as remote:
                 remote.ping()
@@ -374,20 +387,20 @@ class NodeInfo:
     'Represent a ChordNode information necesary to create proxies'
 
     def __init__(self, id: int, ip: str, port: int):
-        self.id = id
-        self.ip = ip
-        self.port = port
+        self.id=id
+        self.ip=ip
+        self.port=port
 
 
 class Finger:
     def __init__(self, start, node):
-        self.start = start
-        self.node = node
+        self.start=start
+        self.node=node
 
     def set(self, id, ip, port):
-        self.id = id
-        self.ip = ip
-        self.port = port
+        self.id=id
+        self.ip=ip
+        self.port=port
 
     @property
     def id(self):
@@ -397,10 +410,10 @@ class Finger:
 class FingerTable:
 
     def __init__(self, id):
-        self.id = id
-        self.fingers = []
+        self.id=id
+        self.fingers=[]
         for i in range(m):
-            start = self.fix(i)
+            start=self.fix(i)
             self.fingers.append(Finger(start, None))
 
     def print_fingers(self):
@@ -411,8 +424,8 @@ class FingerTable:
         return self.fingers[index]
 
     def __setitem__(self, index: int, node: 'NodeInfo'):  # get node at this position
-        start = self.fix(index)
-        self.fingers[index] = Finger(start, node)
+        start=self.fix(index)
+        self.fingers[index]=Finger(start, node)
 
     def fix(self, k):
         return (self.id + (1 << k)) % M

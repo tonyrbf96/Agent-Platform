@@ -32,12 +32,15 @@ if __name__ =='__main__':
     node = Node(int(id),ip,int(port),'boostrap')
     
     #id ip port for join point Node
-    id = sys.argv[4]
-    ip = sys.argv[5]
-    port = sys.argv[6]
     
-    node.start_serving(NodeInfo(int(id),ip,int(port)))
-    
+    if len(sys.argv)>5:
+        id = sys.argv[4]
+        ip = sys.argv[5]
+        port = sys.argv[6]
+        node.start_serving(NodeInfo(int(id),ip,int(port)))
+    else:
+        uri = sys.argv[4]
+        node.start_serving(uri=uri)
     #this try is because when delete node the while raise an exception, this is when I kill this process
     try: 
         while node:
