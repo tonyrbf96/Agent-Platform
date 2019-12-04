@@ -1,7 +1,4 @@
-
-
 from chord.node import Node
-# from chord.node import Node
 from utils import aid
 
 
@@ -43,3 +40,10 @@ class Chord:
         'deletes a given key'
         pass
 
+    def join(self, other):
+        'joins two chords together (really only one node)'
+        pass
+
+    def get_value(self):
+        'gets a random value from the chord ring'
+        pass

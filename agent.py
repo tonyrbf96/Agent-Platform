@@ -82,13 +82,18 @@ class BaseAgent:
             self.state = BUSY
         except KeyError:
             print(f'El servicio solicitado: {name} no existe')
+        except:
+            print(f'Error ejecutando la función {name} con los parámetros {args}')
 
    
     def execute_behaviour(self, behaviour, name, *args):
-        b = behaviour(name) 
-        self.active_behaviours.append(b)
-        b.on_start()
-        return b.run(*args)
+        try:
+            b = behaviour(name) 
+            self.active_behaviours.append(b)
+            b.on_start(*args)
+            return b.run(*args)
+        except TypeError as e:
+            print(e)
 
    
     def add_behaviour(self, name, b):

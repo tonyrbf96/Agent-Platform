@@ -1,6 +1,6 @@
 from ams import AMS
 from test_agents import *
-from agent_platform import get_platform, initialize_servers, initialize_server
+from agent_platform_old import get_platform, initialize_server, add_server
 import socket
 import cmd
 from utils.aid import AID
@@ -11,6 +11,7 @@ class PlatformClient(cmd.Cmd):
         super().__init__(*args, **kwargs)
         self.prompt = '> '
         self.platform = None
+        self.platforms = []
 
     def do_EOF(self):
         return
@@ -76,7 +77,6 @@ class PlatformClient(cmd.Cmd):
             self.ip, self.port = ip, port
             ams = AMS(ip, port+1, '')
             self.platform.register(ams.aid.name, ams.uri)
-            self.platform.add_server()
         except OSError:
             print('No se pudo asignar la dirección pedida')
             return
@@ -99,7 +99,7 @@ class PlatformClient(cmd.Cmd):
                     print('No se ha creado una plataforma local')
                     return
                 platform = self.platform
-            platform.add_server()
+            self.platforms.append(add_server(*self._parse_address(address)))
         except Exception as e:
             print(e)
 
@@ -136,7 +136,7 @@ class PlatformClient(cmd.Cmd):
 
     def do_execute_method(self, args):
         """
-        Ejecta un método de un agente provisto
+        Ejecuta un método de un agente provisto
         Parámetros:
             - agent: el nombre del agente a ejecutar.
             - method: el nombre del método a ejecutar.
@@ -188,6 +188,7 @@ class PlatformClient(cmd.Cmd):
             aid = AID(agent_name)
         except ValueError:
             print('El nombre del agente tiene que tener el formato localname@ip:port')
+            return None, None
 
         try:
             if len(params) > 1:
@@ -324,8 +325,6 @@ class PlatformClient(cmd.Cmd):
             print(e)
             return
         
-        # ams_uri = input('uri del ams: ') #jnjcnkd
-
         if aid.localname == 'dummy':
             agent = DummyAgent(aid)
         elif aid.localname == 'fibonacci':
@@ -342,8 +341,11 @@ class PlatformClient(cmd.Cmd):
             print('No se encuentra el agente solicitado')
             return
         
-        agent.register_ams(ams_uri)
-    
+        try:
+            agent.register_ams(ams_uri)
+        except Exception as e:
+            print(e)
+
 
     def do_ams(self, args):
         """
@@ -359,11 +361,13 @@ class PlatformClient(cmd.Cmd):
         address1 = params[0]
         if len(params) > 1:
             address2 = params[1]
+            platform = self._get_platform(address2)
         else:
             if not self.platform:
                 print('No se ha creado una plataforma local')
                 return
             address2 = f'{self.ip}:{self.port}'
+            platform = self.platform
         
         try:
             ip, port = self._parse_address(address1)
@@ -376,11 +380,12 @@ class PlatformClient(cmd.Cmd):
         except:
             print(f'La dirección {address1} está ocupada')
         try:
-            platform = get_platform(self.ip, self.port)
+            another_ams_uri = platform.get_node()
+            another_ams = Pyro4.Proxy(another_ams_uri)
+            another_ams.join(ams)
             platform.register(ams.aid.name, ams.uri)
         except Exception as e:
             print(e)
-            return
     
 
     def do_get_agents(self, args):
@@ -406,9 +411,9 @@ class PlatformClient(cmd.Cmd):
             return
 
         agents = ams.get_agents()
-        print('Agents in the platform:', end=' ')
+        print('Agents in the platform:')
         for a in agents:
-            print(a, end=' ')
+            print('\t', a)
         print()
 
 
@@ -435,10 +440,10 @@ class PlatformClient(cmd.Cmd):
         if len(params) > 1:
             address2 = params[1]
             try:
-                ip2, port2 = self._parse_address(address2)
-                platform = get_platform(ip2, port2)
+                platform = self._get_platform(address2)
             except Exception as e:
                 print(e)
+                return
         else:
             if not self.platform:
                 print('No se ha creado una plataforma local')
@@ -453,9 +458,9 @@ class PlatformClient(cmd.Cmd):
             return
 
         agents = ams.get_local_agents()
-        print('Agents in the ams:', end='\n\t')
+        print('Agents in the ams:')
         for a in agents:
-            print(a, end=' ')
+            print('\t', a)
         print()
 
 

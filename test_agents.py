@@ -19,8 +19,8 @@ class EchoAgent(Agent):
     class EchoBehav(Behaviour):
         @run_cyclic
         def run(self):
-                text = input()
-                print(text)
+            text = input()
+            print(text)
 
     def setup(self):
         print('---------------------------------')

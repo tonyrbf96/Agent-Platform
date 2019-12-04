@@ -35,7 +35,7 @@ class Behaviour:
         if self.lock.locked():
             self.lock.release()
 
-    def on_start(self):
+    def on_start(self, *args):
         "Function called before the behavior is started"
         pass
 

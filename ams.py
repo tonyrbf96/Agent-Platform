@@ -15,8 +15,13 @@ class AMS(BaseAgent):
         # TODO: El agente se une al anillo de Chord q le corresponde según la plataforma
         self.chord = Chord(hash(self.aid), host, port)
         self.start_serving()
-        # se añade el ams al anillo de chord
 
+
+    def __del__(self):
+        del self.chord
+        
+    def _get_chord(self):
+        return self.chord
 
     def register(self, agent_name, uri, state=0):
         "Registers an agent in the ams"
@@ -29,12 +34,6 @@ class AMS(BaseAgent):
     def deregister(self, aid):
         "Deregisters an agent in the ams"
         self.chord.delete_key(hash(aid))
-
-
-    def modify(self, aid, state):
-        "Modifies the state of an agent"
-        # not important...
-        pass
 
     
     def get_agents(self):
@@ -49,6 +48,7 @@ class AMS(BaseAgent):
         return [ad.aid.name for ad in self.agents]
         # return self.chord.get_local_values()
 
+    
     def search(self, aid):
         "Searchs for the description of an agent in the ams"
         for ad in self.agents:
@@ -60,6 +60,11 @@ class AMS(BaseAgent):
         #     return AMSAgentDescription.loads(desc)
         # except:
         #     raise Exception(f'Cannot find the agent {aid}')
+
+
+    def join(self, another):
+        'Joins two ams together'
+        self.chord.join(another._get_chord())
 
 
     def stop_agent(self, aid):
@@ -92,16 +97,13 @@ class AMS(BaseAgent):
         if agent is None:
             return
         return agent.get_status()
-        
+
 
     def get_agent_proxy(self, aid):
-        try: 
-            print(f'Buscando el agente: {aid.name}')
-            agent_desc = self.search(aid)
-            print(f'Agente encontrado en el AMS, contactando con el cliente...')
-            return Pyro4.Proxy(agent_desc.uri)
-        except Exception as e:
-            print(e)
+        print(f'Buscando el agente: {aid.name}')
+        agent_desc = self.search(aid)
+        print(f'Agente encontrado en el AMS, contactando con el cliente...')
+        return Pyro4.Proxy(agent_desc.uri)
         return None
 
 

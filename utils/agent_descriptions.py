@@ -1,4 +1,5 @@
 import json
+from aid import AID
 
 # TODO: Use a custom decoder
 class AMSAgentDescription:
@@ -18,8 +19,9 @@ class AMSAgentDescription:
 
     @staticmethod
     def loads(json_obj):
-        dict_ = json.loads(json_obj)
-        return AMSAgentDescription(**dict_)
+        info = json.loads(json_obj)
+        info['aid'] = AID(info['aid'])
+        return AMSAgentDescription(**info)
 
 class DFAgentDescription:
     def __init__(self, aid, services):
