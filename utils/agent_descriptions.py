@@ -1,5 +1,5 @@
 import json
-from aid import AID
+from utils.aid import AID
 
 # TODO: Use a custom decoder
 class AMSAgentDescription:
@@ -13,9 +13,9 @@ class AMSAgentDescription:
 
     def dumps(self):
         return json.dumps({
-            'aid': aid.name, 
-            'state': state,
-            'uri': uri})
+            'aid': self.aid.name, 
+            'state': self.state,
+            'uri': self.uri})
 
     @staticmethod
     def loads(json_obj):

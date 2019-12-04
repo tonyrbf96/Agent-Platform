@@ -18,6 +18,7 @@ class AMS(BaseAgent):
 
 
     def __del__(self):
+        print('hello desde el ams')
         del self.chord
         
     def _get_chord(self):

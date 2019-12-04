@@ -2,6 +2,7 @@ import Pyro4
 from Pyro4.errors import PyroError
 from utils.boostrap import Boostrap
 from threading import Thread
+from ams import AMS
 
 N = 5
 
@@ -53,6 +54,8 @@ def add_server(ip, port):
     platform.add_server(ap.uri)
     for k,n in platform.items():
         ap.add_boostrap(k,n)
+    ams = AMS(ip, port+1, platform)
+    ap.register(ams.aid.name, ams.uri)
     return ap
 
 @Pyro4.expose
@@ -66,6 +69,9 @@ class AgentPlatform:
         self.connections = []
         self.servers = []
 
+
+    def __del__(self):
+        print('Hello desde la plataforma')
 
     def __getitem__(self, value):
         return self.boostrap.table[value]

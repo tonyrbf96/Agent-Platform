@@ -3,7 +3,7 @@ from Pyro4.errors import PyroError
 from utils.boostrap import Boostrap
 from threading import Thread
 from chord.chord import Chord
-from chord.address import Address
+from ams import AMS
 
 N = 5
 
@@ -53,7 +53,9 @@ def add_server(ip, port):
     ap = AgentPlatform(_transf_ip(ip, platform.get_n()), port, platform.get_n())
     platform.add_server(ap.uri)
     for k,n in platform.items():
-        ap.add_boostrap(k,n)
+        ap.register(k,n)
+    ams = AMS(ip, port+1, platform)
+    ap.register(ams.aid.name, ams.uri)
     return ap
 
 

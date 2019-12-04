@@ -15,6 +15,7 @@ class Chord:
 
     def __del__(self):
         'kill local node and release resources'
+        print('hello desde chord')
         pass 
     
     def add(self, key, value):
