@@ -4,6 +4,9 @@ from utils.boostrap import Boostrap
 from threading import Thread
 from chord.chord import Chord
 from ams import AMS
+import hashlib
+from chord.node import get_hash
+from random import randint
 
 N = 5
 
@@ -36,16 +39,16 @@ def get_platform(ip, port):
 
 def initialize_server(ip, port):
     "Initialize one of the servers that will contain the platform"
-    return AgentPlatform(ip, port, 0)
-
+    ap = AgentPlatform(ip, port, 0)
+    ap.join()
+    return ap
 
 def add_server(ip, port):
     platform = get_platform(ip, port)
-    ap = AgentPlatform(_transf_ip(ip, platform.get_n()), port, platform.get_n())
+    ip = _transf_ip(ip, platform.n)
+    ap = AgentPlatform(ip, port+platform.i, platform.n)
     platform.add_server(ap.uri)
-    for k,n in platform.items():
-        ap.register(k,n)
-    ams = AMS(ip, port+1, platform)
+    ams = AMS(ip, randint(1024, 10000))
     ap.register(ams.aid.name, ams.uri)
     return ap
 
@@ -53,26 +56,40 @@ def add_server(ip, port):
 @Pyro4.expose
 class AgentPlatform:
     def __init__(self, ip, port, i):
-        self.i = i
-        self.n = self.i + 1
+        self._i = i
+        self._n = self._i + 1
         self.ip, self.port = ip, port
-        self.chord = Chord(hash(f'{ip}:{port}'), ip, port)
         self.start_serving()
+        hash_ = get_hash(f'{ip}:{port}')
+        self.chord = Chord(hash_, ip, port + 1, 'platform')
         self.connections = []
         self.servers = []
+        self.ams_chord_id = None
 
 
     def __del__(self):
         del self.chord
 
-    
-    @property
-    def get_i(self):
-        return self.i
+    def join(self, uri=None):
+        self.chord.join(uri)
 
     @property
-    def get_chord(self):
-        return self.chord
+    def i(self):
+        return self._i
+
+    @property
+    def n(self):
+        return self._n
+
+    @property
+    def chord_id(self):
+        return self.chord.get_id()
+
+    def get_ams_chord_id(self):
+        ams_uri = self.get_node()
+        with Pyro4.Proxy(ams_uri) as ams:
+            return ams.get_chord_id()
+
 
     def start_serving(self):
         "Starts serving the platform"
@@ -85,9 +102,8 @@ class AgentPlatform:
         "Adds a back-up server to the platform"
         print('--------------------------------')
         print(f'Adding server: {uri} to the platform')
-        server = Pyro4.Proxy(uri)
-        self.chord.join(server.get_chord)
-
+        with Pyro4.Proxy(uri) as server:
+            server.join(self.chord_id)
 
     def ping(self):
         "Checks if the platform is alive"
@@ -101,25 +117,38 @@ class AgentPlatform:
         """
         print('--------------------------------')
         print(f'Registering id: {name} with value: {uri}')
-        ams = Pyro4.Proxy(uri)
-        another_ams_uri = self.get_node()
-        another_ams = Pyro4.Proy(another_ams_uri)
-        ams.join(another_ams) 
-        return self.chord.add(name, uri)
+        try:
+            ams_chord_id = self.get_ams_chord_id()            
+        except:
+            print('Problem')
+            ams_chord_id = None
+        with Pyro4.Proxy(uri) as ams:
+            ams.join(ams_chord_id)
+        name_id = get_hash(name)
+        self.chord.storage(name_id, uri)
        
 
     def is_registered(self, name, uri):
         "Checks if a key is stored in the boostrap"
-        return uri in self.chord.get_values()
+        #? que pasa si no se encuentra una llave        
+        name_id = get_hash(name)
+        if not name_id:
+            return False
+        uri_stored = self.chord.get(name_id)
+        return uri_stored == uri
 
     
     def unregister(self, name):
         "Unregisters a key in the boostrap"
         print('--------------------------------')
         print(f'Eliminando id: {name}')
-        self.chord.delete_key(name)
+        self.chord.remove(name)
 
     
+    def get_item(self, name):
+        name_id = get_hash(name)
+        return self.chord.get(name_id)
+
     def get_node(self):
         "Gets a random node from the boostrap"
-        return self.chord.get_value()
+        return self.chord.get_first()

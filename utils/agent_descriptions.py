@@ -14,12 +14,12 @@ class AMSAgentDescription:
     def dumps(self):
         return json.dumps({
             'aid': self.aid.name, 
-            'state': self.state,
+            'state': self.current_state,
             'uri': self.uri})
 
     @staticmethod
-    def loads(json_obj):
-        info = json.loads(json_obj)
+    def loads(obj):
+        info = json.loads(obj)
         info['aid'] = AID(info['aid'])
         return AMSAgentDescription(**info)
 

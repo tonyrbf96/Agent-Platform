@@ -3,21 +3,9 @@ import Pyro4
 from threading import Thread
 import threading
 import time
-import debug.logger as log
-
-
-m = 7
-M = (1 << m) - 1
-
-
-Pyro4.config.SERIALIZER = 'pickle'
-Pyro4.config.SERIALIZERS_ACCEPTED = {
-    'serpent', 'json', 'marshal', 'pickle'}
-
-STABILIZATION_TIME = 0.2
-RETRY_TIME = STABILIZATION_TIME * 4
-ASSURED_LIFE_TIME = RETRY_TIME * 4
-
+from debug import logger as log
+from config import *
+import hashlib
 
 def repeat(sleep_time, condition: lambda *args: True):
     def decorator(func):
@@ -27,6 +15,9 @@ def repeat(sleep_time, condition: lambda *args: True):
                 time.sleep(sleep_time)
         return inner
     return decorator
+
+def get_hash(name):
+    return int(hashlib.sha1(name.encode()).hexdigest(), 16) % M
 
 
 def retry_if_failure(retry_delay: float, attempts: int = 3):
@@ -73,7 +64,7 @@ class Node:
         self.assured_data = {}
         self.chord_id = chord_id
 
-        log.init_logger(f"Node {self.id}", log.DEBUG)  # init logging
+        log.init_logger(f"Node {self.id}", log.INFO)  # init logging
         log.debug(f"init")
 
     def start_serving(self, node: 'NodeInfo' = None, uri: str = None):
@@ -82,15 +73,17 @@ class Node:
         '''
         log.info(f"staring serving...")
         self.pyro_daemon = Pyro4.Daemon(host=self.ip, port=self.port)
-        self.pyro_daemon.register(self, self.Name(self.id))
+        self.uri = self.pyro_daemon.register(self, self.Name(self.id))
         Thread(
             target=self.pyro_daemon.requestLoop,
             daemon=True).start()
 
-        if not node:
+        if not node and uri:
             with Pyro4.Proxy(uri) as remote:
                 node = remote.info
 
+        if not node and not uri:
+            node = self.info
         if node and node.id != self.id:
             self.join(node)
         else:
@@ -397,12 +390,12 @@ class Node:
                 successor = nodes.pop()
                 time.sleep(RETRY_TIME)
                 continue
+            if successor.id == self.id:
+                break
             with self.proxy(successor) as remote:
                 yield mapper(remote)
                 nodes.append(successor)
                 successor = remote.successor
-            if successor.id == self.id:
-                break
 
 
 ######################################################################

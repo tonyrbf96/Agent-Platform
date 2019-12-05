@@ -109,8 +109,8 @@ class Agent(BaseAgent):
         self.state = ACTIVE
         "Registers the agent in a given ams"
         try:
-            ams = Pyro4.Proxy(ams_uri)
-            ams.register(self.aid.name, self.uri)
+            with Pyro4.Proxy(ams_uri) as ams:
+                ams.register(self.aid.name, self.uri)
         except Exception as e:
             print(e)
 

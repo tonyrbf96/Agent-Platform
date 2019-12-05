@@ -55,8 +55,7 @@ if __name__ =='__main__':
                      print(list(values))
             if command.startswith('add'):
                 keys = command.split()
-                for key in keys[1:]:
-                    chord.storage(int(key),f'{int(key)}')
+                chord.storage(int(keys[1]),f'{keys[2]}')
             # if command == 'debug':
             #     print(node.__dict__)
             if command.startswith('delete'):

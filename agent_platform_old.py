@@ -54,7 +54,7 @@ def add_server(ip, port):
     platform.add_server(ap.uri)
     for k,n in platform.items():
         ap.add_boostrap(k,n)
-    ams = AMS(ip, port+1, platform)
+    ams = AMS(ip, port+1)
     ap.register(ams.aid.name, ams.uri)
     return ap
 

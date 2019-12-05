@@ -1,10 +1,12 @@
 from ams import AMS
 from test_agents import *
-from agent_platform_old import get_platform, initialize_server, add_server
+from agent_platform import get_platform, initialize_server, add_server
 import socket
 import cmd
 from utils.aid import AID, check_ip
 import Pyro4
+from random import randint
+
 
 class PlatformClient(cmd.Cmd):
     def __init__(self, *args, **kwargs):
@@ -71,8 +73,11 @@ class PlatformClient(cmd.Cmd):
         try:
             self.platform = initialize_server(ip, port)
             self.ip, self.port = ip, port
-            ams = AMS(ip, port+1, '')
+            # add_server()
+            ams = AMS(ip, randint(1024, 10000))
             self.platform.register(ams.aid.name, ams.uri)
+            # ams = AMS(ip, port+2)
+            # self.platform.register(ams.aid.name, ams.uri)
         except OSError:
             print('No se pudo asignar la dirección pedida')
 
@@ -91,7 +96,7 @@ class PlatformClient(cmd.Cmd):
                 ip, port = self._parse_address(address)
             else:
                 if not self.platform:
-                    print('No se ha creado una plataforma local')
+                    print('No se ha creado una plataforma local.')
                     return
                 ip, port = self.ip, self.port
             self.platforms.append(add_server(ip, port))
@@ -363,7 +368,7 @@ class PlatformClient(cmd.Cmd):
         if len(params) > 1:
             address2 = params[1]
             platform = self._get_platform(address2)
-        else:
+        else: 
             if not self.platform:
                 print('No se ha creado una plataforma local')
                 return
@@ -377,7 +382,7 @@ class PlatformClient(cmd.Cmd):
             return
         
         try:
-            ams = AMS(ip, port, address2)
+            ams = AMS(ip, port)
         except:
             print(f'La dirección {address1} está ocupada')
             return

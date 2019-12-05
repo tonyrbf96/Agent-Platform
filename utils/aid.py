@@ -1,4 +1,7 @@
 import json
+import hashlib
+from chord.node import get_hash
+
 
 def check_ip(ip):
     "Checks a valid ip"
@@ -35,11 +38,7 @@ class AID:
         }
 
     def __hash__(self):
-        h = hash(self.name) 
-        for i in self.addresses + self.resolvers:
-            h += hash(i)
-        a = ''
-        return h
+        return get_hash(self.name)
         
     def __eq__(self, other):
         return self.name == other.name

@@ -5,69 +5,62 @@ from threading import Thread
 from chord.chord import Chord
 import Pyro4, json
 
+
 @Pyro4.expose
 class AMS(BaseAgent):
-    def __init__(self, host, port, platform):
+    def __init__(self, host, port):
         self.aid = AID(f'ams@{host}:{port}')
         self.host = host
         self.port = port
         self.agents = [] # estructura que guardará los agentes en la plataforma
-        self.chord = Chord(hash(self.aid), host, port)
         self.start_serving()
+        self.chord = Chord(hash(self.aid), self.host, self.port+1, 'ams')
 
 
     def __del__(self):
         print('hello desde el ams')
         del self.chord
         
-    def _get_chord(self):
-        return self.chord
+    def join(self, uri):
+        self.chord.join(uri)
+
+    def get_chord_id(self):
+        return self.chord.get_id()
 
     def register(self, agent_name, uri, state=0):
-        "Registers an agent in the ams"
+        "Registers an agent into the ams"
         aid = AID(agent_name, resolvers=[self.aid])
-        ams_desc = AMSAgentDescription(aid, state, uri)
-        self.agents.append(ams_desc)
-        # self.chord.add(hash(aid), ams_desc.dumps())
+        ams_desc = AMSAgentDescription(aid, state, uri.asString())
+        print(ams_desc)
+        self.chord.storage(hash(aid), ams_desc.dumps())
         
     def ping(self):
-        "Check if the ams is alive"
+        "Checks if the ams is alive"
         return True
 
     def deregister(self, aid):
         "Deregisters an agent in the ams"
-        self.chord.delete_key(hash(aid))
+        self.chord.remove(hash(aid))
 
     
     def get_agents(self):
         "Returns all the agens in the platform"
-        # TODO: Se supone que busque por el resto de las llaves de chord
-        return [ad.aid.name for ad in self.agents]
-        # return self.chord.get_values()
+        return self.chord.get_all()
         
 
     def get_local_agents(self):
         "Returns all the agents of the ams"
-        return [ad.aid.name for ad in self.agents]
-        # return self.chord.get_local_values()
+        return self.chord.get_locals()
 
     
     def search(self, aid):
         "Searchs for the description of an agent in the ams"
-        for ad in self.agents:
-            if ad.aid == aid:
-                return ad
-        raise Exception(f'No se puede encontrar el agente {aid.name}')
-        # try:
-        #     desc = self.chord.get(hash(aid))
-        #     return AMSAgentDescription.loads(desc)
-        # except:
-        #     raise Exception(f'Cannot find the agent {aid}')
-
-
-    def join(self, another):
-        'Joins two ams together'
-        self.chord.join(another._get_chord())
+        try:
+            desc = self.chord.get(hash(aid))
+            print(desc)
+            return AMSAgentDescription.loads(desc)
+        except:
+            raise Exception(f'Cannot find the agent {aid.name}')
 
 
     def stop_agent(self, aid):
@@ -112,6 +105,7 @@ class AMS(BaseAgent):
         except:
             Exception(f'No se puede contactar con el agente {aid.name}')
         return agent
+
 
     def execute_agent(self, aid, methods):
         "Excecutes the agent with the requiered aid"
