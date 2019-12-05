@@ -1,4 +1,3 @@
-
 import random
 import Pyro4
 from threading import Thread
@@ -269,9 +268,8 @@ class Node:
         # discount time for every data in the reinsure dict and
         # delete it if time == 0
         for key in list(self.assured_data.keys()):
-            _, time = self.assured_data[key]
+            value, time = self.assured_data[key]
             time -= 1
-            value, _ = self.assured_data[key]
             self.assured_data[key] = value, time
             if time == 0:
                 self.assured_data.pop(key)
