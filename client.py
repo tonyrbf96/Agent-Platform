@@ -490,8 +490,9 @@ class PlatformClient(cmd.Cmd):
             - platform (opcional): dirección de la plataforma en la que se añadirá el agente.
                 Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
         """
-        pass
-
+        ams = self._get_ams(args)
+        res = ams.search_d()
+        print(list(res))
 
     def get_services(self, args):
         """
@@ -500,7 +501,7 @@ class PlatformClient(cmd.Cmd):
             - platform (opcional): dirección de la plataforma en la que se añadirá el agente.
                 Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
         """
-        pass
+        
 
 
     def do_quit(self, args):

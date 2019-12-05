@@ -4,7 +4,7 @@ from utils.agent_descriptions import AMSAgentDescription
 from threading import Thread
 from chord.chord import Chord
 import Pyro4, json
-
+import json
 
 @Pyro4.expose
 class AMS(BaseAgent):
@@ -26,6 +26,12 @@ class AMS(BaseAgent):
 
     def get_chord_id(self):
         return self.chord.get_id()
+
+    def load_json(self, obj):
+        return json.loads(obj)['aid']
+
+    def search_d(self):
+        return self.chord.get_all(lambda x: self.load_json(x)[0] == 'd')
 
     def register(self, agent_name, uri, state=0):
         "Registers an agent into the ams"
