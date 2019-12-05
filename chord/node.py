@@ -387,8 +387,8 @@ class Node:
         except Pyro4.errors.CommunicationError:
             return False
 
-    def iter(self, filter):
-        yield filter(self)
+    def iter(self, mapper):
+        yield mapper(self)
         successor = self.successor
         nodes = []
         nodes.append(self.info)
@@ -398,7 +398,7 @@ class Node:
                 time.sleep(RETRY_TIME)
                 continue
             with self.proxy(successor) as remote:
-                yield filter(remote)
+                yield mapper(remote)
                 nodes.append(successor)
                 successor = remote.successor
             if successor.id == self.id:
