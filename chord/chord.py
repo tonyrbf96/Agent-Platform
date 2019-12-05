@@ -1,13 +1,12 @@
-from chord.node import Node
-from utils import aid
+from node import Node
 import debug.logger as log
 
 
 class Chord:
     'Interface for handle chord ring'
 
-    def __init__(self, id, ip, port):
-        self.node = Node(id, ip, port)
+    def __init__(self, id, ip, port,chord_id):
+        self.node = Node(id, ip, port,chord_id)
 
     def __del__(self):
         'kill local node and release resources'
@@ -23,11 +22,12 @@ class Chord:
 
     def get_local_values(self):
         'get local node values'
-        return list(self.node.data.values())
+        return self.node.get_data()
 
-    def get_values(self):
+    def get_all_values(self):
         'gets all the values stored in the ring'
-        pass
+        for data in self.node.iter(lambda node: node.get_data()):
+            yield data
 
     def delete_key(self, key:int):
         'deletes a given key'
@@ -39,4 +39,6 @@ class Chord:
 
     def get_value(self):
         'gets a random value from the chord ring'
-        pass
+        for data in self.node.iter(lambda node: node.get_data()):
+            if len(data) > 0:
+                return data[0]

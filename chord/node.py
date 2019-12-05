@@ -42,9 +42,11 @@ def retry_if_failure(retry_delay: float, attempts: int = 3):
                     time.sleep(retry_delay)
                     continue
                 if i > 0:
-                    log.debug(f'resolve correctly function: {func.__name__} in attemt {i}')
+                    log.debug(
+                        f'resolve correctly function: {func.__name__} in attemt {i}')
                 return result
-            log.exception(f"can't handle exceptions with stabilization")
+            log.exception(
+                f"can't handle exceptions with stabilization")
         return inner
     return decorator
 
@@ -74,7 +76,7 @@ class Node:
         log.init_logger(f"Node {self.id}", log.DEBUG)  # init logging
         log.debug(f"init")
 
-    def start_serving(self, node: 'NodeInfo' = None,uri:str=None):
+    def start_serving(self, node: 'NodeInfo' = None, uri: str = None):
         '''
         node: Joint point
         '''
@@ -88,12 +90,12 @@ class Node:
         if not node:
             with Pyro4.Proxy(uri) as remote:
                 node = remote.info
-                
 
         if node and node.id != self.id:
             self.join(node)
         else:
-            log.info('the entry id is the same, this is the initial node')
+            log.info(
+                'the entry id is the same, this is the initial node')
             self.predecessor = None
             self.successor = self.info
 
@@ -211,7 +213,8 @@ class Node:
         # successor list
         if not self.is_node_alive(self.successor):
             self.successor = self.find_first_successor_alive()
-            log.debug(f'set new succesor from successor list: {self.successor.id}')
+            log.debug(
+                f'set new succesor from successor list: {self.successor.id}')
 
         try:
             with self.proxy(self.successor) as remote:
@@ -255,7 +258,8 @@ class Node:
             try:
                 with self.proxy(self.predecessor) as remote:
                     remote.set_data(transference)
-                    log.debug(f'set data to predecessor (node {self.predecessor.id}): {list(transference.keys())}')
+                    log.debug(
+                        f'set data to predecessor (node {self.predecessor.id}): {list(transference.keys())}')
             except BaseException:
                 log.exception(
                     f'problem sending data to node {self.predecessor.id}')
@@ -282,7 +286,8 @@ class Node:
                 with self.proxy(node) as remote:
                     remote.reinsure(self.data)
             except BaseException as e:
-                log.error(f"error transfering data for ensure to {node.id}")
+                log.error(
+                    f"error transfering data for ensure to {node.id}")
 
     def reinsure(self, data: dict):
         'save and update data into the ensured data dict'
@@ -301,6 +306,9 @@ class Node:
         pass
 
     # DATA Handling
+
+    def get_data(self):
+        return list(self.data.values())
 
     def set_data(self, data):
         "This is used for the successor node for transfer the correspondent data"
@@ -360,7 +368,7 @@ class Node:
         finger: {self.finger.print_fingers()}
         keys: {list(map(lambda i:i[0],self.data.items()))}
         assured: {list(map(lambda i:i[0],self.assured_data.items()))}''')
-        
+
     def URI(self, id: int, ip: str, port: int) -> str:
         return f"Pyro:{self.Name(id)}@{ip}:{port}"
 
@@ -379,26 +387,43 @@ class Node:
         except Pyro4.errors.CommunicationError:
             return False
 
+    def iter(self, filter):
+        yield filter(self)
+        successor = self.successor
+        nodes = []
+        nodes.append(self.info)
+        while True:
+            if not successor or not self.is_node_alive(successor):
+                successor = nodes.pop()
+                time.sleep(RETRY_TIME)
+                continue
+            with self.proxy(successor) as remote:
+                yield filter(remote)
+                nodes.append(successor)
+                successor = remote.successor
+            if successor.id == self.id:
+                break
+
 
 ######################################################################
 class NodeInfo:
     'Represent a ChordNode information necesary to create proxies'
 
     def __init__(self, id: int, ip: str, port: int):
-        self.id=id
-        self.ip=ip
-        self.port=port
+        self.id = id
+        self.ip = ip
+        self.port = port
 
 
 class Finger:
     def __init__(self, start, node):
-        self.start=start
-        self.node=node
+        self.start = start
+        self.node = node
 
     def set(self, id, ip, port):
-        self.id=id
-        self.ip=ip
-        self.port=port
+        self.id = id
+        self.ip = ip
+        self.port = port
 
     @property
     def id(self):
@@ -408,10 +433,10 @@ class Finger:
 class FingerTable:
 
     def __init__(self, id):
-        self.id=id
-        self.fingers=[]
+        self.id = id
+        self.fingers = []
         for i in range(m):
-            start=self.fix(i)
+            start = self.fix(i)
             self.fingers.append(Finger(start, None))
 
     def print_fingers(self):
@@ -422,8 +447,8 @@ class FingerTable:
         return self.fingers[index]
 
     def __setitem__(self, index: int, node: 'NodeInfo'):  # get node at this position
-        start=self.fix(index)
-        self.fingers[index]=Finger(start, node)
+        start = self.fix(index)
+        self.fingers[index] = Finger(start, node)
 
     def fix(self, k):
         return (self.id + (1 << k)) % M
