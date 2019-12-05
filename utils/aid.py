@@ -1,5 +1,14 @@
 import json
 
+def check_ip(ip):
+    "Checks a valid ip"
+    strings = ip.split('.')
+    assert len(strings) == 4
+    for s in strings:
+        n = int(s)
+        assert 0 <= n < 256
+
+
 class AID:
     def __init__(self, name:str, resolvers:list=None):
         """
@@ -12,7 +21,8 @@ class AID:
         self.addresses = [address]
         self.host, self.port = address.split(':')
         self.port = int(self.port)
-        
+        self.host = check_ip(self.host)
+
         self.resolvers = resolvers if resolvers else list()
 
 

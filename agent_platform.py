@@ -34,15 +34,6 @@ def get_platform(ip, port):
     raise Exception("No se pudo encontrar una plataforma disponible")
 
 
-def initialize_servers(ip, port): # DONT USE THIS
-    "Initialize the servers that will contain the platform"
-    servers = [AgentPlatform(_transf_ip(ip, i), port, i) for i in range(N)]
-    uris = [server.uri for server in servers]
-    for server in servers:
-        server.initialize_servers(uris)
-    return servers
-
-
 def initialize_server(ip, port):
     "Initialize one of the servers that will contain the platform"
     return AgentPlatform(ip, port, 0)
@@ -87,11 +78,13 @@ class AgentPlatform:
         "Starts serving the platform"
         daemon = Pyro4.Daemon(self.ip, self.port)
         self.uri = daemon.register(self, f'platform_{self.i}')
-        Thread(target=daemon.requestLoop).start()
+        Thread(target=daemon.requestLoop, daemon=True).start()
 
 
     def add_server(self, uri):
         "Adds a back-up server to the platform"
+        print('--------------------------------')
+        print(f'Adding server: {uri} to the platform')
         server = Pyro4.Proxy(uri)
         self.chord.join(server.get_chord)
 
@@ -108,6 +101,10 @@ class AgentPlatform:
         """
         print('--------------------------------')
         print(f'Registering id: {name} with value: {uri}')
+        ams = Pyro4.Proxy(uri)
+        another_ams_uri = self.get_node()
+        another_ams = Pyro4.Proy(another_ams_uri)
+        ams.join(another_ams) 
         return self.chord.add(name, uri)
        
 

@@ -101,7 +101,7 @@ class AgentPlatform:
         daemon = Pyro4.Daemon(self.ip, self.port)
         self.uri = daemon.register(self, f'platform_{self.i}')
         print(self.uri)
-        Thread(target=daemon.requestLoop).start()
+        Thread(target=daemon.requestLoop, daemon=True).start()
 
 
     def initialize_servers(self, servers_uri): # DONT USE THIS

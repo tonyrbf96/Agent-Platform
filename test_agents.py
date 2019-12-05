@@ -2,7 +2,6 @@ from agent import Agent
 from behaviour import Behaviour, run_cyclic
 from ams import AMS
 import time
-import threading
 
 class HelloWorldAgent(Agent):
     class HelloBehav(Behaviour):
@@ -53,20 +52,21 @@ class DummyAgent(Agent):
 class FibonacciAgent(Agent):
     class FiboBehav(Behaviour):
         def run(self, n):
-            print('HI')
             try: 
                 n = int(n)
             except ValueError:
                 raise Exception('Por favor, inserte un argumento válido')
             
-            def fibonacci(n):
+            a = 0
+            b = 1
+            for i in range(n):
                 if self.ended: return
                 if self.stopped: self.lock.acquire()
-                if n < 2:
-                    return n
-                return fibonacci(n-1) + fibonacci(n-2)
-            
-            res = fibonacci(n)
+                print(a)
+                tmp = b
+                b = a + b
+                a = tmp
+            res = a
             print(f'El número {n} de la sucesión de Fibonacci es {res}')
 
     def setup(self):

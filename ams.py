@@ -12,7 +12,6 @@ class AMS(BaseAgent):
         self.host = host
         self.port = port
         self.agents = [] # estructura que guardará los agentes en la plataforma
-        # TODO: El agente se une al anillo de Chord q le corresponde según la plataforma
         self.chord = Chord(hash(self.aid), host, port)
         self.start_serving()
 
@@ -31,6 +30,9 @@ class AMS(BaseAgent):
         self.agents.append(ams_desc)
         # self.chord.add(hash(aid), ams_desc.dumps())
         
+    def ping(self):
+        "Check if the ams is alive"
+        return True
 
     def deregister(self, aid):
         "Deregisters an agent in the ams"
@@ -55,7 +57,7 @@ class AMS(BaseAgent):
         for ad in self.agents:
             if ad.aid == aid:
                 return ad
-        raise Exception(f'Cannot find the agent {aid.name}')
+        raise Exception(f'No se puede encontrar el agente {aid.name}')
         # try:
         #     desc = self.chord.get(hash(aid))
         #     return AMSAgentDescription.loads(desc)
@@ -103,10 +105,13 @@ class AMS(BaseAgent):
     def get_agent_proxy(self, aid):
         print(f'Buscando el agente: {aid.name}')
         agent_desc = self.search(aid)
-        print(f'Agente encontrado en el AMS, contactando con el cliente...')
-        return Pyro4.Proxy(agent_desc.uri)
-        return None
-
+        print(f'Agente encontrado en el AMS, contactando con el agente...')
+        agent = Pyro4.Proxy(agent_desc.uri)
+        try:
+            agent.ping()
+        except:
+            Exception(f'No se puede contactar con el agente {aid.name}')
+        return agent
 
     def execute_agent(self, aid, methods):
         "Excecutes the agent with the requiered aid"
@@ -114,7 +119,7 @@ class AMS(BaseAgent):
         print(f'Solicitando la ejecución del cliente: {aid.name}')
         agent = self.get_agent_proxy(aid)
         if agent is None:
-            print(f'No se pudo encontrar el agent {aid.name} en la plataforma')
+            print(f'No se pudo encontrar al agente {aid.name} en la plataforma')
             return
         print('Contactado exitosamente')
         for meth in methods:

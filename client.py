@@ -3,7 +3,7 @@ from test_agents import *
 from agent_platform_old import get_platform, initialize_server, add_server
 import socket
 import cmd
-from utils.aid import AID
+from utils.aid import AID, check_ip
 import Pyro4
 
 class PlatformClient(cmd.Cmd):
@@ -30,20 +30,16 @@ class PlatformClient(cmd.Cmd):
         except ValueError:
             raise Exception('El puerto debe ser un número válido')
         try:
-            self._check_ip(ip)
+            assert 0 <= port <= 65535
+        except AssertionError:
+            raise Exception('El puerto debe ser un número entre 0-65535')
+        try:
+            check_ip(ip)
         except:
             raise TypeError(f'El formato del ip {ip} es incorrecto')            
       
         return ip, port
 
-    def _check_ip(self, ip):
-        "Checks a valid ip"
-        strings = ip.split('.')
-        assert len(strings) == 4
-        for s in strings:
-            n = int(s)
-            assert 0 <= n < 256
-        
     
     def _get_ams(self, address):
         "Gets an ams from a given address that represents a platform"    
@@ -79,7 +75,6 @@ class PlatformClient(cmd.Cmd):
             self.platform.register(ams.aid.name, ams.uri)
         except OSError:
             print('No se pudo asignar la dirección pedida')
-            return
 
 
     def do_add_server(self, args):
@@ -93,13 +88,13 @@ class PlatformClient(cmd.Cmd):
         try:
             if params:
                 address = params[0]
-                platform = self._get_platform(address)
+                ip, port = self._parse_address(address)
             else:
                 if not self.platform:
                     print('No se ha creado una plataforma local')
                     return
-                platform = self.platform
-            self.platforms.append(add_server(*self._parse_address(address)))
+                ip, port = self.ip, self.port
+            self.platforms.append(add_server(ip, port))
         except Exception as e:
             print(e)
 
@@ -165,12 +160,15 @@ class PlatformClient(cmd.Cmd):
         try:
             ams_uri = self._get_ams_uri(address)
             ams = Pyro4.Proxy(ams_uri)
+            ams.ping()
+        except:
+            print('Fallo al contactar con el servidor del ams')
+            return
+        try:
             if args:
                 res = ams.execute_method(aid, method, *args)
             else:
                 res = ams.execute_method(aid, method)
-            if res is not None:
-                print(f'El resultado del método ejecutado es {res}')
         except Exception as e:
             print(e)
 
@@ -277,7 +275,7 @@ class PlatformClient(cmd.Cmd):
 
         try:
             ams = Pyro4.Proxy(ams_uri)
-            status = ams.get_status(aid)
+            status = ams.get_agent_status(aid)
             if status == 1:
                 print(f'El agente {aid.name} está activo')
             elif status == 2:
@@ -325,22 +323,25 @@ class PlatformClient(cmd.Cmd):
             print(e)
             return
         
-        if aid.localname == 'dummy':
-            agent = DummyAgent(aid)
-        elif aid.localname == 'fibonacci':
-            agent = FibonacciAgent(aid)
-        elif aid.localname == 'prime':
-            agent = PrimeAgent(aid)
-        elif aid.localname == 'binary':
-            agent = BinaryToDecimalAgent(aid)
-        elif aid.localname == 'echo':
-            agent = EchoAgent(aid)
-        elif aid.localname == 'hello_world':
-            agent = HelloWorldAgent(aid)
-        else:
-            print('No se encuentra el agente solicitado')
+        try:
+            if aid.localname == 'dummy':
+                agent = DummyAgent(aid)
+            elif aid.localname == 'fibonacci':
+                agent = FibonacciAgent(aid)
+            elif aid.localname == 'prime':
+                agent = PrimeAgent(aid)
+            elif aid.localname == 'binary':
+                agent = BinaryToDecimalAgent(aid)
+            elif aid.localname == 'echo':
+                agent = EchoAgent(aid)
+            elif aid.localname == 'hello_world':
+                agent = HelloWorldAgent(aid)
+            else:
+                print('No se encuentra el agente solicitado')
+                return
+        except Exception as e:
             return
-        
+
         try:
             agent.register_ams(ams_uri)
         except Exception as e:
@@ -379,10 +380,11 @@ class PlatformClient(cmd.Cmd):
             ams = AMS(ip, port, address2)
         except:
             print(f'La dirección {address1} está ocupada')
+            return
         try:
             another_ams_uri = platform.get_node()
             another_ams = Pyro4.Proxy(another_ams_uri)
-            another_ams.join(ams)
+            # another_ams.join(ams)
             platform.register(ams.aid.name, ams.uri)
         except Exception as e:
             print(e)
@@ -419,7 +421,7 @@ class PlatformClient(cmd.Cmd):
 
     def do_get_ams_agents(self, args):
         """
-        Obtiene el nombre de los agentes registrados en un ams especifico
+        Obtiene el nombre de los agentes registrados en un ams específico
         Parámetros:
             - address1: la dirección del ams
             - address2 (opcional): la dirección de la plataforma en la que se añadirá el agente.

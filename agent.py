@@ -17,12 +17,15 @@ class BaseAgent:
         self.name = aid.name
         self.state = INITIATED
         self.setup()
-        self.start_serving()
-        self.active_threads = []
+        res = self.start_serving()
+        if not res:
+            raise Exception('Error al iniciar el agente')
         self.active_behaviours = []
         self.stopped_behaviours = []
         self.state = INITIATED
 
+    def ping(self):
+        return True
    
     def start_serving(self):
         print('---------------------------------')
@@ -32,7 +35,7 @@ class BaseAgent:
             daemon = Pyro4.Daemon(self.aid.host, self.aid.port)
             self.uri = daemon.register(self, localname)
             print(f'La uri de {self.aid.name} es {self.uri}')
-            Thread(target=daemon.requestLoop).start()
+            Thread(target=daemon.requestLoop, daemon=True).start()
             return True
         except Exception as e:
             print(f'Error al arrancar el agente {localname}')
@@ -58,15 +61,17 @@ class BaseAgent:
         for b in self.active_behaviours:
             b.stop()
             self.stopped_behaviours.append(b)
-        self.state = ACTIVE
+        if self.stopped_behaviours:
+            self.state = STOPPED
 
 
     def restart(self):
         "Restarts the execution of an agent"
         for b in self.stopped_behaviours:
             b.restart()
+        if self.stopped_behaviours:
+            self.state = BUSY
         self.stopped_behaviours = []
-        self.state = BUSY
 
     
     def get_status(self):
@@ -76,9 +81,7 @@ class BaseAgent:
     def run_behaviour(self, name, *args):
         try:
             b = self.behaviours[name]
-            t = Thread(target=self.execute_behaviour, args=(b, name, *args))
-            self.active_threads.append(t)
-            t.start()
+            Thread(target=self.execute_behaviour, args=(b, name, *args), daemon=True).start()
             self.state = BUSY
         except KeyError:
             print(f'El servicio solicitado: {name} no existe')

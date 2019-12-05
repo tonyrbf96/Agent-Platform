@@ -4,10 +4,10 @@ from utils import aid
 
 class Chord:
     'Interface for handle chord ring'
-    def __init__(self, id_, ip, port):
-        for i in range(1, 1023 - port):
+    def __init__(self, id_s, ip_s, port_s):
+        for i in range(1, 1023 - port_s):
             try:
-                self.node = Node(id_, ip, port + i) 
+                self.node = Node(id_s, ip_s, port_s + i) 
                 break
             except:
                 raise Exception('Se falló asignando la dirección')
@@ -15,7 +15,6 @@ class Chord:
 
     def __del__(self):
         'kill local node and release resources'
-        print('hello desde chord')
         pass 
     
     def add(self, key, value):
@@ -41,9 +40,11 @@ class Chord:
         'deletes a given key'
         pass
 
+
     def join(self, other):
         'joins two chords together (really only one node)'
         pass
+
 
     def get_value(self):
         'gets a random value from the chord ring'
