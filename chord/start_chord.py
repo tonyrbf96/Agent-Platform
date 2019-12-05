@@ -1,15 +1,15 @@
-from node import Node,NodeInfo
+from chord import Chord
 import sys
 import signal
 
 
 
-node = None
+chord = None
 
 def quit():
-    global node
+    global chord
     print(f"\n>>> quit")
-    del(node)
+    del(chord)
 
 def receiveSignal(signalNumber, frame):
     quit()
@@ -29,7 +29,7 @@ if __name__ =='__main__':
     port = sys.argv[3]
     
     
-    node = Node(int(id),ip,int(port),'boostrap')
+    chord = Chord(int(id),ip,int(port),'C-1')
     
     #id ip port for join point Node
     
@@ -37,31 +37,34 @@ if __name__ =='__main__':
         id = sys.argv[4]
         ip = sys.argv[5]
         port = sys.argv[6]
-        node.start_serving(NodeInfo(int(id),ip,int(port)))
+        chord.join(chord.node.URI(int(id),ip,int(port)))
     else:
         uri = sys.argv[4]
-        node.start_serving(uri=uri)
+        chord.join(uri=uri)
     #this try is because when delete node the while raise an exception, this is when I kill this process
     try: 
-        while node:
+        while chord:
             command = input('>>> ')
             
-            if command == '' or command == 'show':
-                node.print_info()
             if command == 'quit':
                 sys.quit()
-            if command.startswith('save'):
+            if command == 'locals':
+                print(list(chord.get_locals()))
+            if command == 'all':
+                for values in chord.get_all():
+                     print(list(values))
+            if command.startswith('add'):
                 keys = command.split()
                 for key in keys[1:]:
-                    node.save(int(key),'')
-            if command == 'debug':
-                print(node.__dict__)
+                    chord.storage(int(key),f'{int(key)}')
+            # if command == 'debug':
+            #     print(node.__dict__)
             if command.startswith('delete'):
                 keys = command.split()
                 for key in keys[1:]:
-                    node.delete(int(key))
+                    chord.remove(int(key))
             if command == 'uri':
-                print(node.URI(node.id,node.ip,node.port))
+                print(chord.node.URI(chord.node.id,chord.node.ip,chord.node.port))
             pass
     except:
         pass
