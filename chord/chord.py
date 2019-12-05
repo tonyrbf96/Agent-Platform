@@ -1,5 +1,5 @@
-from node import Node
-from debug import logger as log
+from chord.node import Node
+from chord.debug import logger as log
 
 
 class Chord:

@@ -11,7 +11,7 @@ cformatter =  logging.Formatter('%(levelname)s : %(message)s')
 
 #handlers
 consoleHandler = logging.StreamHandler()
-fileHandler = logging.FileHandler(filename='./logs/debug.log')
+fileHandler = logging.FileHandler(filename='./chord/logs/debug.log')
 consoleHandler.formatter = cformatter
 fileHandler.formatter = fformatter
 

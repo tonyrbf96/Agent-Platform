@@ -52,7 +52,7 @@ if __name__ =='__main__':
                 print(list(chord.get_locals()))
             if command == 'all':
                 for values in chord.get_all():
-                     print(list(values))
+                     print(values)
             if command.startswith('add'):
                 keys = command.split()
                 chord.storage(int(keys[1]),f'{keys[2]}')
@@ -64,6 +64,10 @@ if __name__ =='__main__':
                     chord.remove(int(key))
             if command == 'uri':
                 print(chord.node.URI(chord.node.id,chord.node.ip,chord.node.port))
+            
+            if command == 'debug':
+                print(chord.node.__dict__)
+           
             pass
     except:
         pass

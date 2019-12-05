@@ -3,9 +3,15 @@ import Pyro4
 from threading import Thread
 import threading
 import time
-from debug import logger as log
-from config import *
+from chord.debug import logger as log
+from chord.config import *
 import hashlib
+
+
+
+STABILIZATION_TIME = 0.2
+RETRY_TIME = STABILIZATION_TIME * 4
+ASSURED_LIFE_TIME = RETRY_TIME * 4
 
 def repeat(sleep_time, condition: lambda *args: True):
     def decorator(func):
@@ -111,6 +117,7 @@ class Node:
     def join(self, node: 'NodeInfo'):
         "node self joins the network node is a arbitrary node in the network"
         self.predecessor = None
+        log.debug('joint')
         with self.proxy(node) as remote:
             self.successor = remote.find_successor(self.id)
             # initialize successor_list using successor.successor_list
@@ -236,7 +243,7 @@ class Node:
             # Take dada from storage is needed
             for key in list(self.assured_data.keys()):
                 if in_interval(key, self.predecessor.id, self.id):
-                    t, value = self.assured_data.pop(key)
+                    value, t = self.assured_data.pop(key)
                     self.data[key] = value
                     log.debug(f'assume key assured : {key}')
             # Transfer data to predecessor
