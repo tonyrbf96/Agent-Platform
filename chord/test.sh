@@ -9,9 +9,12 @@ done
 }
 
 new(){
-xterm -e bash -c "source $PWD/test.sh; ./test.sh run_node $1 $2 $3 $4; bash" &
+xterm -e bash -c "source $PWD/test.sh; ./test.sh run_node_from_uri $1 $2 $3 $4; bash" &
 }
 
+run_node_from_uri(){
+python start_node.py $1 $2 $3 $4
+}
 
 run_node(){
 port=$(($2 + $1))

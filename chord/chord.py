@@ -4,10 +4,10 @@ from utils import aid
 
 class Chord:
     'Interface for handle chord ring'
-    def __init__(self, id_, ip, port):
+    def __init__(self, id, ip, port):
         for i in range(1, 1023 - port):
             try:
-                self.node = Node(id_, ip, port + i) 
+                self.node = Node(id, ip, port + i) 
                 break
             except:
                 raise Exception('Se falló asignando la dirección')
@@ -18,7 +18,7 @@ class Chord:
         pass 
     
     def add(self, key, value):
-        "add a new data into the chord ring"
+        "add a new key,value into the chord ring"
         self.node.save(key, value)
 
 
