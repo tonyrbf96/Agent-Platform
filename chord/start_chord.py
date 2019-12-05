@@ -49,20 +49,20 @@ if __name__ =='__main__':
             if command == 'quit':
                 sys.quit()
             if command == 'locals':
-                print(list(chord.get_local_values()))
+                print(list(chord.get_locals()))
             if command == 'all':
-                for values in chord.get_all_values():
+                for values in chord.get_all():
                      print(list(values))
             if command.startswith('add'):
                 keys = command.split()
                 for key in keys[1:]:
-                    chord.add(int(key),'')
+                    chord.storage(int(key),f'{int(key)}')
             # if command == 'debug':
             #     print(node.__dict__)
             if command.startswith('delete'):
                 keys = command.split()
                 for key in keys[1:]:
-                    chord.delete(int(key))
+                    chord.remove(int(key))
             if command == 'uri':
                 print(chord.node.URI(chord.node.id,chord.node.ip,chord.node.port))
             pass
