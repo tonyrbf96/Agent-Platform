@@ -44,6 +44,7 @@ def retry_if_failure(retry_delay: float, attempts: int = 3):
                 return result
             log.exception(
                 f"can't handle exceptions with stabilization")
+            args[0].print_info()
         return inner
     return decorator
 

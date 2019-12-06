@@ -71,10 +71,9 @@ class AMS(BaseAgent):
         "Searchs for the description of an agent in the ams"
         try:
             desc = self.chord.get(hash(aid))
-            print(desc)
             return AMSAgentDescription.loads(desc)
         except:
-            raise Exception(f'Cannot find the agent {aid.name}')
+            raise Exception(f'No se puede encontrar al agente {aid.name}')
 
 
     def stop_agent(self, aid):
@@ -82,15 +81,20 @@ class AMS(BaseAgent):
         agent = self.get_agent_proxy(aid)
         if agent is None:
             return
-        agent.stop()
-
+        try:
+            agent.stop()
+        except:
+            raise Exception(f'No se puede contactar con el agent {aid.name}')
     
     def restart_agent(self, aid):
         "Resumes the execution of an agent"
         agent = self.get_agent_proxy(aid)
         if agent is None:
             return
-        agent.restart()
+        try:
+            agent.restart()
+        except:
+            raise Exception(f'No se puede contactar con el agent {aid.name}')
 
     
     def end_agent(self, aid):
@@ -98,23 +102,27 @@ class AMS(BaseAgent):
         agent = self.get_agent_proxy(aid)
         if agent is None:
             return
-        agent.end()
-        
+        try:
+            agent.end()
+        except:
+            raise Exception(f'No se puede contactar con el agente {aid.name}')
     
     def get_agent_status(self, aid):
         "Gets the state of an agent"
         agent = self.get_agent_proxy(aid)
         if agent is None:
             return
-        return agent.get_status()
-
+        try:
+            return agent.get_status()
+        except:
+            raise Exception(f'No se puede contactar con el agente {aid.name}')
 
     def get_agent_proxy(self, aid):
         print(f'Buscando el agente: {aid.name}')
         agent_desc = self.search(aid)
         print(f'Agente encontrado en el AMS, contactando con el agente...')
-        agent = Pyro4.Proxy(agent_desc.uri)
         try:
+            agent = Pyro4.Proxy(agent_desc.uri)
             agent.ping()
         except:
             Exception(f'No se puede contactar con el agente {aid.name}')
@@ -127,7 +135,7 @@ class AMS(BaseAgent):
         print(f'Solicitando la ejecución del cliente: {aid.name}')
         agent = self.get_agent_proxy(aid)
         if agent is None:
-            print(f'No se pudo encontrar al agente {aid.name} en la plataforma')
+            print(f'No se puede encontrar al agente {aid.name} en la plataforma')
             return
         print('Contactado exitosamente')
         for meth in methods:
@@ -139,8 +147,10 @@ class AMS(BaseAgent):
             print(f'No se pudo encontrar al agente en la plataforma')
             return
         print(f'Ejecutando el método: {method}')
-        return agent_proxy.run_behaviour(method, *args)
-
+        try:
+            return agent_proxy.run_behaviour(method, *args)
+        except:
+            raise Exception(f'No se pudo contactar con el agente')
 
     def execute_method(self, aid, method, *args):
         "Executes the agent the agent with the required aid"

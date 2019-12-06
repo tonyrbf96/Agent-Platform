@@ -10,6 +10,7 @@ def check_ip(ip):
     for s in strings:
         n = int(s)
         assert 0 <= n < 256
+    return ip
 
 
 class AID:
@@ -24,8 +25,7 @@ class AID:
         self.addresses = [address]
         self.host, self.port = address.split(':')
         self.port = int(self.port)
-        self.host = check_ip(self.host)
-
+        check_ip(self.host)
         self.resolvers = resolvers if resolvers else list()
 
 
