@@ -5,16 +5,18 @@ from threading import Thread
 from chord.chord import Chord
 import Pyro4, json
 import json
+from random import random
+
 
 @Pyro4.expose
 class AMS(BaseAgent):
-    def __init__(self, host, port):
+    def __init__(self, host, port, chord_id):
         self.aid = AID(f'ams@{host}:{port}')
         self.host = host
         self.port = port
         self.agents = [] # estructura que guardará los agentes en la plataforma
         self.start_serving()
-        self.chord = Chord(hash(self.aid), self.host, self.port+1, 'ams')
+        self.chord = Chord(hash(self.aid), self.host, self.port+1, chord_id)
 
 
     def __del__(self):

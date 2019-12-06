@@ -52,7 +52,7 @@ def get_identificator(ip, port):
 
 def initialize_server(ip, port):
     "Initialize one of the servers that will contain the platform"
-    ap = AgentPlatform(ip, port, 0)
+    ap = AgentPlatform(ip, port, 0, 'platform_' + f'{ip}:{port}')
     ap.join()
     return ap
 
@@ -60,21 +60,21 @@ def initialize_server(ip, port):
 def add_server(ip, port):
     platform = get_platform(ip, port)
     id_ = get_identificator(ip, port)
-    ip = _transf_ip(ip, id_)
-    ap = AgentPlatform(ip, port+id_, id_)
+    new_ip = _transf_ip(ip, id_)
+    ap = AgentPlatform(new_ip, port+id_, id_, 'platform_' + f'{ip}:{port}')
     platform.add_server(ap.uri)
-    ams = AMS(ip, randint(1024, 10000))
+    ams = AMS(ip, randint(1024, 10000), 'ams_' + f'{ip}:{port}')
     ap.register(ams.aid.name, ams.uri)
     return ap
 
 
 @Pyro4.expose
 class AgentPlatform:
-    def __init__(self, ip, port, i):
+    def __init__(self, ip, port, i, chord_id):
         self.i = i
         self.ip, self.port = ip, port
         hash_ = get_hash(f'{ip}:{port}')
-        self.chord = Chord(hash_, ip, randint(1024, 10000), 'platform')
+        self.chord = Chord(hash_, ip, randint(1024, 10000), chord_id)
         self.start_serving()
         self.connections = []
         self.servers = []

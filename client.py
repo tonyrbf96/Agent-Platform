@@ -74,7 +74,7 @@ class PlatformClient(cmd.Cmd):
             self.platform = initialize_server(ip, port)
             self.ip, self.port = ip, port
             # add_server()
-            ams = AMS(ip, randint(1024, 10000))
+            ams = AMS(ip, randint(1024, 10000), 'ams_' + f'{ip}:{port}')
             self.platform.register(ams.aid.name, ams.uri)
             # ams = AMS(ip, port+2)
             # self.platform.register(ams.aid.name, ams.uri)
@@ -382,14 +382,13 @@ class PlatformClient(cmd.Cmd):
             return
         
         try:
-            ams = AMS(ip, port)
+            ams = AMS(ip, port, 'ams_' + address2)
         except:
             print(f'La dirección {address1} está ocupada')
             return
         try:
             another_ams_uri = platform.get_node()
             another_ams = Pyro4.Proxy(another_ams_uri)
-            # another_ams.join(ams)
             platform.register(ams.aid.name, ams.uri)
         except Exception as e:
             print(e)
