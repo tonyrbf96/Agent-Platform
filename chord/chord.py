@@ -47,3 +47,9 @@ class Chord:
     def join(self, uri=Node):
         'joins this node to a chord ring using this node (really only one node)'
         self.node.start_serving(uri=uri)
+
+    def get_first_key(self):
+        'gets a random key from the chord ring'
+        for key in self.node.iter(lambda node: node.get_key()):
+            for k in key:
+                return k

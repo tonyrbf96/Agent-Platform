@@ -43,7 +43,6 @@ class AMS(BaseAgent):
         "Registers an agent into the ams"
         aid = AID(agent_name, resolvers=[self.aid])
         ams_desc = AMSAgentDescription(aid, state, services, uri.asString())
-        print(ams_desc)
         self.chord.storage(hash(aid), ams_desc.dumps())
         
 

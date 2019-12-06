@@ -310,6 +310,9 @@ class Node:
     def get_data(self):
         return list(self.data.values())
 
+    def get_key(self):
+        return list(self.data.keys())
+
     def set_data(self, data):
         "This is used for the successor node for transfer the correspondent data"
         self.data = {**self.data, **data}

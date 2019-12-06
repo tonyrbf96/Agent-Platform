@@ -14,7 +14,7 @@ N = 5
 def _transf_ip(ip, i):
     strings = ip.split('.')
     n = int(strings[-1])
-    n = 255 if n == 0 else n - i
+    n = 0 if n == 255 else n + i
     strings[-1] = str(n)
     return '.'.join(strings)
     
@@ -27,7 +27,7 @@ def build_uri(id_, ip, port):
 def get_platform(ip, port):
     "Gets the first functional platform given by a port"
     for i in range(N):
-        platform_uri = build_uri(f'platform_{i}', _transf_ip(ip, i), port)
+        platform_uri = build_uri(f'platform_{i}', _transf_ip(ip, i), port+i)
         try:
             platform = Pyro4.Proxy(platform_uri)
             platform.ping()
@@ -37,16 +37,31 @@ def get_platform(ip, port):
     raise Exception("No se pudo encontrar una plataforma disponible")
 
 
+def get_identificator(ip, port):
+    "Gets the first valid id for the platform"
+    for i in range(N):
+        platform_uri = build_uri(f'platform_{i}', _transf_ip(ip, i), port+i)
+        try:
+            with Pyro4.Proxy(platform_uri) as platform:
+                platform.ping()
+        except PyroError:
+            return i
+    raise Exception('Ya no se pueden añadir más servidores a la plataforma')
+
+
+
 def initialize_server(ip, port):
     "Initialize one of the servers that will contain the platform"
     ap = AgentPlatform(ip, port, 0)
     ap.join()
     return ap
 
+
 def add_server(ip, port):
     platform = get_platform(ip, port)
-    ip = _transf_ip(ip, platform.n)
-    ap = AgentPlatform(ip, port+platform.i, platform.n)
+    id_ = get_identificator(ip, port)
+    ip = _transf_ip(ip, id_)
+    ap = AgentPlatform(ip, port+id_, id_)
     platform.add_server(ap.uri)
     ams = AMS(ip, randint(1024, 10000))
     ap.register(ams.aid.name, ams.uri)
@@ -56,12 +71,11 @@ def add_server(ip, port):
 @Pyro4.expose
 class AgentPlatform:
     def __init__(self, ip, port, i):
-        self._i = i
-        self._n = self._i + 1
+        self.i = i
         self.ip, self.port = ip, port
-        self.start_serving()
         hash_ = get_hash(f'{ip}:{port}')
-        self.chord = Chord(hash_, ip, port + 1, 'platform')
+        self.chord = Chord(hash_, ip, randint(1024, 10000), 'platform')
+        self.start_serving()
         self.connections = []
         self.servers = []
         self.ams_chord_id = None
@@ -73,13 +87,6 @@ class AgentPlatform:
     def join(self, uri=None):
         self.chord.join(uri)
 
-    @property
-    def i(self):
-        return self._i
-
-    @property
-    def n(self):
-        return self._n
 
     @property
     def chord_id(self):
@@ -120,7 +127,6 @@ class AgentPlatform:
         try:
             ams_chord_id = self.get_ams_chord_id()            
         except:
-            print('Problem')
             ams_chord_id = None
         with Pyro4.Proxy(uri) as ams:
             ams.join(ams_chord_id)
@@ -129,8 +135,7 @@ class AgentPlatform:
        
 
     def is_registered(self, name, uri):
-        "Checks if a key is stored in the boostrap"
-        #? que pasa si no se encuentra una llave        
+        "Checks if a key is stored in the boostrap"     
         name_id = get_hash(name)
         if not name_id:
             return False
@@ -142,7 +147,7 @@ class AgentPlatform:
         "Unregisters a key in the boostrap"
         print('--------------------------------')
         print(f'Eliminando id: {name}')
-        self.chord.remove(name)
+        self.chord.remove(get_hash(name))
 
     
     def get_item(self, name):
@@ -151,4 +156,14 @@ class AgentPlatform:
 
     def get_node(self):
         "Gets a random node from the boostrap"
-        return self.chord.get_first()
+        key = self.chord.get_first_key()
+        if not key:
+            raise Exception('No existe ningún elemento.')
+        uri = self.chord.get(key)
+        try:
+            with Pyro4.Proxy(uri) as ams:
+                ams.ping()
+            return uri
+        except:
+            self.chord.remove(key)
+            return self.get_node()
