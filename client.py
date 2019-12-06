@@ -87,6 +87,9 @@ class PlatformClient(cmd.Cmd):
                 Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
         """
         params = args.split()
+        if len(params) != 2:
+            print('Por favor introduzca argumentos válidos.')
+            return
         try:
             if params:
                 address = params[0]
