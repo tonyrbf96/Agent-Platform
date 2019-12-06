@@ -6,7 +6,7 @@ import cmd
 from utils.aid import AID, check_ip
 import Pyro4
 from random import randint
-
+import json
 
 class PlatformClient(cmd.Cmd):
     def __init__(self, *args, **kwargs):
@@ -468,10 +468,27 @@ class PlatformClient(cmd.Cmd):
         print('Agents in the ams:')
         for a in agents:
             print('\t', a)
-        print()
 
 
-    def do_get_service_agent(self, args):
+    def _get_agents_by_service(self, args):
+        'Auxiliar method to search for the agents that have some service'
+        params = args.split()
+        if not params:
+            print('Introduzca más arguementos')
+            return
+        service_name = params[0]
+        
+        if len(params) > 1:
+            ams_uri = self._get_ams_uri(params[1])
+        else:
+            if not self.platform:
+                print('No se ha creado ninguna plataforma local')
+                return
+            ams_uri = self.platform.get_node()
+        return ams_uri, service_name
+
+
+    def do_get_agents_by_service(self, args):
         """
         Obtiene un agente que cumple determinado servicio
         Parámetros:
@@ -479,7 +496,18 @@ class PlatformClient(cmd.Cmd):
             - platform (opcional): dirección de la plataforma en la que se añadirá el agente.
                 Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
         """
-        pass
+        try:
+            ams_uri, service_name = self._get_agents_by_service(args)
+            with Pyro4.Proxy(ams_uri) as ams:
+                agents = list(ams.search_service(service_name))
+            if not agents:
+                print('No existe ningún agente con el servicio solicitado.')
+            else:
+                print('Agentes con el servicio solicitado:')
+                for a in agents:
+                    print('\t', a)
+        except Exception as e:
+            print(e)
 
 
     def do_execute_service(self, args):
@@ -487,20 +515,58 @@ class PlatformClient(cmd.Cmd):
         Ejecuta un servicio determinado en una plataforma
         Parámetros:
             - service_name: Nombre del servicio que se solicita
-            - platform (opcional): dirección de la plataforma en la que se añadirá el agente.
+            - platform: dirección de la plataforma en la que se añadirá el agente.
                 Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
         """
-        ams = self._get_ams(args)
-        res = ams.search_d()
-        print(list(res))
+        params = args.split()
+        try:
+            ams_uri, service_name = self._get_agents_by_service(args)
+            with Pyro4.Proxy(ams_uri) as ams:
+                agent = ams.search_agent_by_service(service_name)
+            agent = json.loads(agent)
+            if not agent:
+                print('No existe ningún agente con el servicio solicitado.')
+            else:
+                aid = AID(agent['aid'])
+                if len(params) <= 2:
+                    ams.execute_method(aid, service_name)
+                else:
+                    args = params[2:]
+                    ams.execute_method(aid, service_name, *args)
+        except Exception as e:
+            print(e)
 
-    def get_services(self, args):
+
+    def do_get_services(self, args):
         """
         Obtiene todos los servicios disponibles en la plataforma
         Parámetros:
             - platform (opcional): dirección de la plataforma en la que se añadirá el agente.
                 Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
         """
+        params = args.split()
+        if params:
+            platform = params[0]
+        else:
+            if not self.platform:
+                print('No se ha creado una plataforma local')
+                return
+            platform = f'{self.ip}:{self.port}'
+            
+        try:
+            ams = self._get_ams(platform)
+        except Exception as e:
+            print(e)
+            return
+
+        agents = ams.get_agents()
+        res = [json.loads(a) for a in agents]
+        services = set(s for a in res for s in a['services'])
+
+        print('Services in the platform:')
+        for s in services:
+            print('\t', s)
+        print()
         
 
 

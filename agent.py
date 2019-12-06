@@ -110,7 +110,7 @@ class Agent(BaseAgent):
         "Registers the agent in a given ams"
         try:
             with Pyro4.Proxy(ams_uri) as ams:
-                ams.register(self.aid.name, self.uri)
+                ams.register(self.aid.name, self.uri, list(self.behaviours.keys()))
         except Exception as e:
             print(e)
 

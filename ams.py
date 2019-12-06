@@ -28,18 +28,25 @@ class AMS(BaseAgent):
         return self.chord.get_id()
 
     def load_json(self, obj):
-        return json.loads(obj)['aid']
+        return json.loads(obj)
 
-    def search_d(self):
-        return self.chord.get_all(lambda x: self.load_json(x)[0] == 'd')
 
-    def register(self, agent_name, uri, state=0):
+    def search_service(self, name):
+        return self.chord.get_all(lambda x: name in self.load_json(x)['services'])
+
+
+    def search_agent_by_service(self, name):
+        return self.chord.get_first(lambda x: name in self.load_json(x)['services'])
+
+
+    def register(self, agent_name, uri, services, state=0):
         "Registers an agent into the ams"
         aid = AID(agent_name, resolvers=[self.aid])
-        ams_desc = AMSAgentDescription(aid, state, uri.asString())
+        ams_desc = AMSAgentDescription(aid, state, services, uri.asString())
         print(ams_desc)
         self.chord.storage(hash(aid), ams_desc.dumps())
         
+
     def ping(self):
         "Checks if the ams is alive"
         return True
