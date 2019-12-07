@@ -53,7 +53,7 @@ class BaseAgent:
         self.state = ACTIVE
         for b in self.active_behaviours:
             b.end()
-        b.active_behaviours = []
+        self.active_behaviours = []
 
 
     def stop(self):

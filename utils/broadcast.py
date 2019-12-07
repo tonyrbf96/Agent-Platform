@@ -2,7 +2,7 @@ from socket import *
 import sys
 import time
 
-def broadcast_client(port):
+def broadcast_client(port, id_):
     # Create a UDP socket
     sock = socket(AF_INET, SOCK_DGRAM)
     sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
@@ -10,10 +10,10 @@ def broadcast_client(port):
     # sock.settimeout(5)
 
     server_address = ('255.255.255.255', port)
-    message = 'pfg_ip_broadcast_cl'
+    message = f'broadcast_{id_}'
 
     try:
-        while True:
+        for i in range(5):
             # Send data
             sent = sock.sendto(message.encode(), server_address)
 
@@ -25,7 +25,7 @@ def broadcast_client(port):
         sock.close()
 
 
-def broadcast_server(port, address):
+def broadcast_server(port, id_, address):
     sock = socket(AF_INET, SOCK_DGRAM)
     server_address = ('', port)
 
@@ -36,7 +36,7 @@ def broadcast_server(port, address):
     while True:
         data, address = sock.recvfrom(4096)
         data = data.decode()
-        if data == 'pfg_ip_broadcast_cl':
+        if data == f'broadcast_{id_}':
             print('Respondiendo...')
             sent = sock.sendto(response.encode(), address)
             print('Enviando la confirmación de vuelta')

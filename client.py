@@ -1,6 +1,6 @@
-from ams import AMS
+from ams import AMS, get_ams, get_ams_uri, get_ams_fixed_uri
 from test_agents import *
-from agent_platform_v1 import get_platform, initialize_server, add_server
+# from agent_platform_v1 import get_platform, initialize_server, add_server
 import socket
 import cmd
 from utils.aid import AID, check_ip
@@ -12,8 +12,8 @@ class PlatformClient(cmd.Cmd):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.prompt = '> '
-        self.platform = None
-        self.platforms = []
+        self.ip, self.port = None, None
+        self.ams = None
 
     def do_EOF(self):
         return
@@ -42,21 +42,9 @@ class PlatformClient(cmd.Cmd):
       
         return ip, port
 
-    
-    def _get_ams(self, address):
-        "Gets an ams from a given address that represents a platform"    
-        ams_uri = self._get_ams_uri(address)
-        return Pyro4.Proxy(ams_uri)
-
-    def _get_ams_uri(self, address):
-        platform = self._get_platform(address)
-        return platform.get_node()
-
-    def _get_platform(self, address):
-        "Gets a platform from a given address that represents a platform"
+    def _get_identifier(self, address):
         ip, port = self._parse_address(address)
-        return get_platform(ip, port)
-
+        return f'ams_{ip}:{port}'
 
     def do_platform(self, args):
         """
@@ -71,38 +59,12 @@ class PlatformClient(cmd.Cmd):
             return
         
         try:
-            self.platform = initialize_server(ip, port)
             self.ip, self.port = ip, port
-            ams = AMS(ip, randint(1024, 10000), 'ams_' + f'{ip}:{port}')
-            self.platform.register(ams.aid.name, ams.uri)
+            self.id = 'ams_' + f'{ip}:{port}'
+            self.ams = AMS(ip, port, self.id)
+            self.ams.join()
         except OSError:
             print('No se pudo asignar la dirección pedida')
-
-
-    def do_add_server(self, args):
-        """
-        Anade un servidor a una plataforma determinada.
-        Parámetros:
-            - platform (opcional): dirección de la plataforma en la que se añadirá el agente.
-                Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
-        """
-        params = args.split()
-        if len(params) != 2:
-            print('Por favor introduzca argumentos válidos.')
-            return
-        try:
-            if params:
-                address = params[0]
-                ip, port = self._parse_address(address)
-            else:
-                if not self.platform:
-                    print('No se ha creado una plataforma local.')
-                    return
-                ip, port = self.ip, self.port
-            ip1, port1 = self._parse_address(params[1])
-            self.platforms.append(add_server(ip, port, ip1, port1))
-        except Exception as e:
-            print(e)
 
 
 
@@ -127,9 +89,9 @@ class PlatformClient(cmd.Cmd):
             return
         
         methods = params[1:-1]
-        platform = params[-1]
+        identifier = self._get_identifier(platform)
         try:
-            ams = self._get_ams(platform)
+            ams = get_ams(identifier)
             ams.execute_agent(aid, methods)
         except Exception as e:
             print(e)
@@ -162,10 +124,9 @@ class PlatformClient(cmd.Cmd):
         else:
             args = None
 
-        address = params[-1]
+        identifier = self._get_identifier(params[-1])
         try:
-            ams_uri = self._get_ams_uri(address)
-            ams = Pyro4.Proxy(ams_uri)
+            ams = get_ams(identifier)
             ams.ping()
         except:
             print('Fallo al contactar con el servidor del ams')
@@ -194,15 +155,17 @@ class PlatformClient(cmd.Cmd):
             print('El nombre del agente tiene que tener el formato localname@ip:port')
             return None, None
 
+
         try:
             if len(params) > 1:
-                address = params[1]
-                ams_uri = self._get_ams_uri(address)
+                id_ = params[1]
             else:
-                if not self.platform:
+                if not self.ip:
                     print('No se ha creado una plataforma local')
-                    return None, None
-                ams_uri  = self.platform.get_node()
+                    return
+                id_ = f'{self.ip}:{self.port}'
+            id_ = self._get_identifier(id_) 
+            ams_uri = get_ams_uri(id_)
         except Exception as e:
             print(e)
             return None, None
@@ -318,13 +281,13 @@ class PlatformClient(cmd.Cmd):
         
         try:
             if len(params) > 1:
-                address = params[1]
-                ams_uri = self._get_ams_uri(address)
+                id_ = self._get_identifier(params[1])
+                ams_uri = get_ams_uri(id_) 
             else:
-                if not self.platform:
+                if not self.ams:
                     print('No se ha creado una plataforma local')
                     return
-                ams_uri  = self.platform.get_node()
+                ams_uri = self.ams.uri
         except Exception as e:
             print(e)
             return
@@ -369,13 +332,15 @@ class PlatformClient(cmd.Cmd):
         try:
             if len(params) > 1:
                 address2 = params[1]
-                platform = self._get_platform(address2)
+                id_ = self._get_identifier(params[1])
+                register_ams_uri = get_ams_uri(id_) 
             else: 
-                if not self.platform:
+                if not self.ams:
                     print('No se ha creado una plataforma local')
                     return
+                id_ = self.id
                 address2 = f'{self.ip}:{self.port}'
-                platform = self.platform
+                register_ams_uri = self.ams.uri
             ip, port = self._parse_address(address1)
         except Exception as e:
             print(e)
@@ -387,12 +352,9 @@ class PlatformClient(cmd.Cmd):
             print(f'La dirección {address1} está ocupada')
             return
         try:
-            another_ams_uri = platform.get_node()
-            another_ams = Pyro4.Proxy(another_ams_uri)
-            platform.register(ams.aid.name, ams.uri)
+            ams.join(register_ams_uri)
         except Exception as e:
-            print(e)
-    
+            print(e)   
 
     def do_get_agents(self, args):
         """
@@ -402,16 +364,16 @@ class PlatformClient(cmd.Cmd):
                 Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
         """
         params = args.split()
-        if params:
-            platform = params[0]
-        else:
-            if not self.platform:
-                print('No se ha creado una plataforma local')
-                return
-            platform = f'{self.ip}:{self.port}'
-            
         try:
-            ams = self._get_ams(platform)
+            if params:
+                id_ = params[0]
+            else:
+                if not self.ip:
+                    print('No se ha creado una plataforma local')
+                    return
+                id_ = f'{self.ip}:{self.port}'
+            id_ = self._get_identifier(id_)
+            ams = get_ams(id_)
         except Exception as e:
             print(e)
             return
@@ -428,8 +390,6 @@ class PlatformClient(cmd.Cmd):
         Obtiene el nombre de los agentes registrados en un ams específico
         Parámetros:
             - address1: la dirección del ams
-            - address2 (opcional): la dirección de la plataforma en la que se añadirá el agente.
-                Si no se especifica, se usa la plataforma local de haberse creado, en caso contrario da error.
         """
         params = args.split()
         if not params:
@@ -443,21 +403,8 @@ class PlatformClient(cmd.Cmd):
             print(e)
             return   
 
-        if len(params) > 1:
-            address2 = params[1]
-            try:
-                platform = self._get_platform(address2)
-            except Exception as e:
-                print(e)
-                return
-        else:
-            if not self.platform:
-                print('No se ha creado una plataforma local')
-                return
-            platform = self.platform
-            
         try:
-            ams_uri = platform.get_item(f'ams@{ip}:{port}')
+            ams_uri = get_ams_fixed_uri(ip, port)
             if not ams_uri:
                 raise Exception('No se pudo encontrar el ams en la plataforma')    
             ams = Pyro4.Proxy(ams_uri)
@@ -480,12 +427,13 @@ class PlatformClient(cmd.Cmd):
         service_name = params[0]
         
         if len(params) > 1:
-            ams_uri = self._get_ams_uri(params[1])
+            id_ = self._get_identifier(params[1])
+            ams_uri =  get_ams_uri(id_)
         else:
-            if not self.platform:
+            if not self.ams:
                 print('No se ha creado ninguna plataforma local')
                 return
-            ams_uri = self.platform.get_node()
+            ams_uri = self.ams.uri
         return ams_uri, service_name
 
 
@@ -547,18 +495,13 @@ class PlatformClient(cmd.Cmd):
         """
         params = args.split()
         if params:
-            platform = params[0]
+            id_ = self._get_identifier(params[0])
+            ams = get_ams(id_) 
         else:
-            if not self.platform:
+            if not self.ams:
                 print('No se ha creado una plataforma local')
                 return
-            platform = f'{self.ip}:{self.port}'
-            
-        try:
-            ams = self._get_ams(platform)
-        except Exception as e:
-            print(e)
-            return
+            ams = self.ams
 
         agents = ams.get_agents()
         res = [json.loads(a) for a in agents]

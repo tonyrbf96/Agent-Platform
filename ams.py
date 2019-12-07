@@ -6,7 +6,30 @@ from chord.chord import Chord
 import Pyro4, json
 import json
 from random import random
+from utils.broadcast import broadcast_server, broadcast_client
 
+
+def build_uri(id_, ip, port):
+    "Builds an uri given the value of the identifier, ip and a port"
+    return 'PYRO:{}@{}:{}'.format(id_, ip, port)
+
+def get_ams_fixed_uri(ip, port):
+    return build_uri('ams', ip, port)
+
+def get_ams(id_):
+    ams_uri = get_ams_uri(id_)
+    return Pyro4.Proxy(ams_uri)
+
+def get_ams_uri(id_):
+    "Gets the first functional ams given by an id"
+    try:
+        address = broadcast_client(7371, id_)
+        ip, port = address.split(':')
+        port = int(port)
+        return build_uri(f'ams', ip, port)
+    except:
+        raise Exception("No se pudo encontrar una plataforma disponible")
+ 
 
 @Pyro4.expose
 class AMS(BaseAgent):
@@ -14,17 +37,35 @@ class AMS(BaseAgent):
         self.aid = AID(f'ams@{host}:{port}')
         self.host = host
         self.port = port
+        self.address = f'{self.host}:{self.port}'
         self.agents = [] # estructura que guardará los agentes en la plataforma
+        self.id = chord_id
         self.start_serving()
         self.chord = Chord(hash(self.aid), self.host, self.port+1, chord_id)
 
 
     def __del__(self):
-        print('hello desde el ams')
         del self.chord
         
-    def join(self, uri):
+    def join(self, uri=None):
         self.chord.join(uri)
+
+    def start_serving(self):
+        print('---------------------------------')
+        localname = self.aid.localname
+        print(f'Sirviendo el agente {localname}')
+        try:
+            daemon = Pyro4.Daemon(self.aid.host, self.aid.port)
+            self.uri = daemon.register(self, localname)
+            print(f'La uri de {self.aid.name} es {self.uri}')
+            Thread(target=daemon.requestLoop, daemon=True).start()
+            Thread(target=broadcast_server, args=(7371, self.id, self.address), daemon=True).start()            
+            return True
+        except Exception as e:
+            print(f'Error al arrancar el agente {localname}')
+            print(f'Text error: {e}')
+            return False
+
 
     def get_chord_id(self):
         return self.chord.get_id()
