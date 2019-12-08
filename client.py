@@ -1,4 +1,4 @@
-from ams import AMS, get_ams, get_ams_uri, get_ams_fixed_uri
+from ams import AMS, get_ams, get_ams_uri, get_ams_fixed_uri, get_ams_id
 from test_agents import *
 # from agent_platform_v1 import get_platform, initialize_server, add_server
 import socket
@@ -89,8 +89,8 @@ class PlatformClient(cmd.Cmd):
             return
         
         methods = params[1:-1]
-        identifier = self._get_identifier(platform)
         try:
+            identifier = self._get_identifier(platform)
             ams = get_ams(identifier)
             ams.execute_agent(aid, methods)
         except Exception as e:
@@ -124,8 +124,8 @@ class PlatformClient(cmd.Cmd):
         else:
             args = None
 
-        identifier = self._get_identifier(params[-1])
         try:
+            identifier = self._get_identifier(params[-1])
             ams = get_ams(identifier)
             ams.ping()
         except:
@@ -333,14 +333,14 @@ class PlatformClient(cmd.Cmd):
             if len(params) > 1:
                 address2 = params[1]
                 id_ = self._get_identifier(params[1])
-                register_ams_uri = get_ams_uri(id_) 
+                register_ams_uri = get_ams_id(id_) 
             else: 
                 if not self.ams:
                     print('No se ha creado una plataforma local')
                     return
                 id_ = self.id
                 address2 = f'{self.ip}:{self.port}'
-                register_ams_uri = self.ams.uri
+                register_ams_uri = self.ams.get_id()
             ip, port = self._parse_address(address1)
         except Exception as e:
             print(e)
@@ -351,6 +351,7 @@ class PlatformClient(cmd.Cmd):
         except:
             print(f'La dirección {address1} está ocupada')
             return
+
         try:
             ams.join(register_ams_uri)
         except Exception as e:
@@ -378,8 +379,17 @@ class PlatformClient(cmd.Cmd):
             print(e)
             return
 
-        agents = ams.get_agents()
-        print('Agents in the platform:')
+        try:
+            agents = ams.get_agents()
+        except Exception as e: 
+            print(e)
+            return
+
+        if not agents:
+            print('No existe ningún agente en la plataforma')
+            return
+
+        print('Agentes en la platforma:')
         for a in agents:
             print('\t', a)
         print()
@@ -413,7 +423,7 @@ class PlatformClient(cmd.Cmd):
             print(e)
             return
 
-        print('Agents in the ams:')
+        print('Agentes en el ams:')
         for a in agents:
             print('\t', a)
 
@@ -422,7 +432,7 @@ class PlatformClient(cmd.Cmd):
         'Auxiliar method to search for the agents that have some service'
         params = args.split()
         if not params:
-            print('Introduzca más arguementos')
+            print('Introduzca más argumentos')
             return
         service_name = params[0]
         
@@ -495,8 +505,12 @@ class PlatformClient(cmd.Cmd):
         """
         params = args.split()
         if params:
-            id_ = self._get_identifier(params[0])
-            ams = get_ams(id_) 
+            try:
+                id_ = self._get_identifier(params[0])
+                ams = get_ams(id_)
+            except Exception as e:
+                print(e)
+                return 
         else:
             if not self.ams:
                 print('No se ha creado una plataforma local')
@@ -512,7 +526,6 @@ class PlatformClient(cmd.Cmd):
             print('\t', s)
         print()
         
-
 
     def do_quit(self, args):
         "Stops the execution of the prompt"

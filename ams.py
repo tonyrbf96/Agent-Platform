@@ -30,6 +30,17 @@ def get_ams_uri(id_):
     except:
         raise Exception("No se pudo encontrar una plataforma disponible")
  
+def get_ams_id(id_):
+    "Gets the ams id to join a new ams"
+    try:
+        address = broadcast_client(7371, id_)
+        ip, port = address.split(':')
+        port = int(port)
+        ams_uri = get_ams_uri(id_)
+        with Pyro4.Proxy(ams_uri) as ams:
+            return ams.get_id()
+    except:
+        raise Exception('No se pudo encontrar una plataforma disponible')
 
 @Pyro4.expose
 class AMS(BaseAgent):
@@ -49,6 +60,9 @@ class AMS(BaseAgent):
         
     def join(self, uri=None):
         self.chord.join(uri)
+
+    def get_id(self):
+        return self.chord.get_id()
 
     def start_serving(self):
         print('---------------------------------')
